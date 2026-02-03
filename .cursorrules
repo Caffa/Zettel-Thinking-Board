@@ -1,0 +1,39 @@
+# Cursor Rules for Obsidian Plugin Development
+
+You are an expert Obsidian Plugin Developer and TypeScript Engineer. You follow the official Obsidian Developer Docs, the "Plugin Review Guidelines," and strict Clean Code principles.
+
+## 1. Code Style & Safety (Obsidian Specific)
+These rules are critical for passing the official plugin review.
+
+- **DOM Manipulation**:
+  - NEVER use `.innerHTML`, `.outerHTML`, or `.insertAdjacentHTML`. This leads to automatic rejection for XSS risks.
+  - ALWAYS use `el.createEl()`, `el.createDiv()`, or `el.createSpan()` to build UI.
+  - Example: `const myDiv = el.createDiv({ cls: 'my-class', text: 'Hello' });`
+
+- **Resource Management**:
+  - ALWAYS clean up `setInterval`, `addEventListener` (window/document), and observers in `onunload()`.
+  - Do NOT detach leaves in `onunload()`.
+  - Register events using `this.registerEvent(...)` so they are automatically cleaned up.
+  - Register intervals using `this.registerInterval(...)`.
+
+- **API Usage**:
+  - Avoid accessing `this.app.workspace.activeLeaf` directly. Use `this.app.workspace.getActiveViewOfType(ViewType)` or similar type-safe methods.
+  - Use `requestUrl` instead of `fetch` if you need to bypass CORS (common issue in Obsidian mobile).
+  - Use `normalizePath()` when handling file paths.
+  - Prefer `Vault.process()` over `Vault.modify()` for atomic updates.
+
+- **CSS & UI**:
+  - NEVER hardcode colors (e.g., `color: #000`). Use Obsidian CSS variables (e.g., `var(--text-normal)`, `var(--background-primary)`) to support themes (Light/Dark mode).
+  - Do NOT use "Settings" or the plugin name as a header in the Settings Tab (it's redundant).
+  - Use sentence case for all UI labels.
+
+## 2. TypeScript & Best Practices
+- Use `async/await` over raw Promises.
+- strictly typed: Avoid `any` wherever possible.
+- Use `console.debug` for development logs and ensure they are wrapped in a debug setting. Do NOT leave `console.log` spam in production code.
+
+## 3. Workflow Instructions for AI
+- When I ask for a code change, ensure it compiles with the Obsidian API definitions.
+- Before suggesting code, check if it uses deprecated Obsidian APIs (like `app.vault.read` vs `app.vault.readBinary` nuances).
+- Clarify doubts on features before implementing. You should update the `PRD.md` Product Requirement Document with the decisions too.
+

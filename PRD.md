@@ -1,11 +1,3 @@
-This is a significant workflow improvement. It separates the **Logical Graph** (how data flows) from the **Visual Output** (what you see).
-
-It effectively means the **Green Nodes are "sidecars" or "annotations"** rather than structural pipes. The data passes invisibly from the Orange Node directly to the Blue Node, while the Green Node hangs below the Orange Node just so you can read what happened.
-
-Here are the updated documents for **Zettel Thinking Board**.
-
----
-
 # Part 1: Product Requirement Document (PRD)
 
 **Project Name:** Zettel Thinking Board
@@ -19,7 +11,7 @@ Here are the updated documents for **Zettel Thinking Board**.
 ## 2. Core Philosophy
 *   **Logic over Layout:** Connections define the data flow (e.g., Prompt -> Code). Visual outputs (Green nodes) are artifacts, not dependencies.
 *   **Invisible Data Passing:** Node A passes its result to Node B internally in memory, regardless of whether a visual output node exists.
-*   **Stateful Intelligence:** A persistent Python kernel allows for variable retention across different nodes in the graph.
+*   **Stateful Intelligence:** A persistent Python kernel **per canvas** allows for variable retention across different nodes in the same graph; each open canvas has its own kernel, which is torn down when the canvas is closed.
 
 ## 3. Functional Requirements
 
@@ -44,7 +36,7 @@ The plugin parses colors to determine behavior.
     *   It retrieves Node A's result from the internal dictionary (not by reading a Green node).
 *   **Ollama Integration:** Connects to local instance (default `localhost:11434`).
 *   **Python Kernel:**
-    *   Single persistent child process.
+    *   **One kernel per canvas:** A persistent child process is created when a canvas is opened and terminated when that canvas is closed; switching canvases uses (or creates) the kernel for the active canvas.
     *   Standard Input/Output bridge.
     *   **Side Channel:** `obsidian_log()` for debugging to Side Panel.
 

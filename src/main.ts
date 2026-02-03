@@ -1,99 +1,177 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import {Menu, Notice, Plugin, WorkspaceLeaf} from "obsidian";
+import {DEFAULT_SETTINGS, ZettelPluginSettings, ZettelSettingTab} from "./settings";
+import {ZettelControlsView, ZETTEL_CONTROLS_VIEW_TYPE} from "./views/ZettelControlsView";
+import {dismissOutput as runnerDismissOutput, runChain as runnerRunChain, runNode as runnerRunNode} from "./engine/runner";
+import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
+import {loadCanvasData} from "./canvas/nodes";
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class ZettelThinkingBoardPlugin extends Plugin {
+	settings: ZettelPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
+		this.addSettingTab(new ZettelSettingTab(this.app, this));
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
+		this.registerView(
+			ZETTEL_CONTROLS_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new ZettelControlsView(leaf, this)
+		);
+
+		this.addCommand({
+			id: "open-zettel-controls",
+			name: "Open Zettel Controls",
+			callback: () => this.activateZettelControls(),
 		});
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
+			id: "run-node",
+			name: "Run node",
 			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+				const view = this.getActiveCanvasView();
+				if (!view) return false;
+				if (checking) return true;
+				// Command palette: no node selected; prompt user to use context menu
+				new Notice("Right-click a node and choose \"Run node\" to run it.");
+				return true;
+			},
+		});
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+		this.addCommand({
+			id: "run-chain",
+			name: "Run chain",
+			checkCallback: (checking: boolean) => {
+				const view = this.getActiveCanvasView();
+				if (!view) return false;
+				if (checking) return true;
+				new Notice("Right-click a node and choose \"Run chain\" to run from roots.");
+				return true;
+			},
+		});
+
+		this.addCommand({
+			id: "dismiss-output",
+			name: "Dismiss output",
+			checkCallback: (checking: boolean) => {
+				const view = this.getActiveCanvasView();
+				if (!view) return false;
+				if (checking) return true;
+				new Notice("Right-click a node and choose \"Dismiss output\" to remove its output.");
+				return true;
+			},
+		});
+
+		// Canvas node context menu: Run Node, Run Chain, Dismiss Output
+		const onCanvasNodeMenu = this.app.workspace.on as (
+			name: string,
+			callback: (menu: Menu, node: { id?: string }) => void
+		) => ReturnType<typeof this.app.workspace.on>;
+		this.registerEvent(
+			onCanvasNodeMenu("canvas:node-menu", (menu: Menu, node: { id?: string }) => {
+				const nodeId = node?.id;
+				if (!nodeId) return;
+				menu.addItem((item) =>
+					item.setTitle("Run node").setIcon("play").onClick(() => this.runNode(nodeId))
+				);
+				menu.addItem((item) =>
+					item.setTitle("Run chain").setIcon("forward").onClick(() => this.runChain(nodeId))
+				);
+				menu.addItem((item) =>
+					item.setTitle("Dismiss output").setIcon("trash").onClick(() => this.dismissOutput(nodeId))
+				);
+			})
+		);
+
+		// Terminate kernel when a canvas is closed (one kernel per canvas)
+		let previousCanvasPaths = new Set<string>();
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () => {
+				const leaves = this.app.workspace.getLeavesOfType("canvas");
+				const openPaths = new Set<string>();
+				for (const leaf of leaves) {
+					const v = leaf.view as { file?: { path: string } };
+					if (v?.file?.path) openPaths.add(v.file.path);
 				}
-				return false;
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-
+				for (const path of previousCanvasPaths) {
+					if (!openPaths.has(path)) terminateKernel(path);
+				}
+				previousCanvasPaths = openPaths;
+			})
+		);
 	}
 
 	onunload() {
+		terminateAllKernels();
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			(await this.loadData()) as Partial<ZettelPluginSettings>
+		);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-}
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+	async activateZettelControls(): Promise<void> {
+		const {workspace} = this.app;
+		const leaves = workspace.getLeavesOfType(ZETTEL_CONTROLS_VIEW_TYPE);
+		const existing = leaves[0];
+		if (existing) {
+			workspace.revealLeaf(existing);
+			return;
+		}
+		const leaf = workspace.getRightLeaf(false);
+		if (leaf != null) {
+			await leaf.setViewState({ type: ZETTEL_CONTROLS_VIEW_TYPE });
+			workspace.revealLeaf(leaf);
+		}
 	}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
+	/** Returns the active canvas view if the active leaf is a canvas. */
+	getActiveCanvasView(): { canvas: unknown; file: { path: string } } | null {
+		const leaf = this.app.workspace.activeLeaf;
+		if (!leaf?.view) return null;
+		const v = leaf.view as { getViewType?: () => string; canvas?: unknown; file?: { path: string } };
+		if (v.getViewType?.() !== "canvas") return null;
+		if (v.canvas == null || v.file == null) return null;
+		return { canvas: v.canvas, file: v.file };
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	/** Run a single node (call from context menu with node id). */
+	async runNode(nodeId: string): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) return;
+		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+		if (!result.ok) new Notice(result.message ?? "Run node failed.");
+	}
+
+	/** Run chain from roots to the given node (call from context menu with node id). */
+	async runChain(nodeId: string): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) return;
+		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+		if (!result.ok) new Notice(result.message ?? "Run chain failed.");
+	}
+
+	/** Dismiss the Green output node for the given source node (call from context menu with node id). */
+	async dismissOutput(nodeId: string): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) return;
+		const data = await loadCanvasData(this.app.vault, view.file.path);
+		if (!data) return;
+		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		runnerDismissOutput(data, nodeId, this.settings, liveCanvas);
+	}
+
+	/** Get kernel for the active canvas (for side panel to wire obsidian_log). */
+	getKernelForActiveCanvas(): import("./engine/pythonKernel").PythonKernel | null {
+		const view = this.getActiveCanvasView();
+		if (!view) return null;
+		return getKernelForCanvas(view.file.path, this.settings.pythonPath);
 	}
 }
