@@ -23,7 +23,6 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 	orange: "Model (primary)",
 	purple: "Model (secondary)",
 	red: "Model (tertiary)",
-
 	blue: "Python",
 	yellow: "Text",
 	green: "Output",
@@ -164,6 +163,106 @@ export function getPresetColor(presetNumber: 1 | 2 | 3 | 4 | 5 | 6): string {
 	return PRESET_HEX[String(n)] ?? "#888";
 }
 
+/** Known color names with their RGB values for color matching. */
+const COLOR_NAMES: Record<string, {r: number, g: number, b: number}> = {
+	"Red": {r: 239, g: 68, b: 68},      // #ef4444
+	"Orange": {r: 230, g: 134, b: 25},   // #e68619
+	"Yellow": {r: 234, g: 179, b: 8},    // #eab308
+	"Green": {r: 34, g: 197, b: 94},     // #22c55e
+	"Purple": {r: 168, g: 85, b: 247},   // #a855f7
+	"Blue": {r: 59, g: 130, b: 246},     // #3b82f6
+};
+
+/** Threshold for color distance matching (in RGB space, 0-441 range). */
+const COLOR_MATCH_THRESHOLD = 50;
+
+/**
+ * Parse a color string (hex, rgb, rgba) and return RGB components.
+ * Returns null if the color cannot be parsed.
+ */
+function parseColorToRGB(color: string): {r: number, g: number, b: number} | null {
+	const trimmed = color.trim();
+	
+	// Handle hex colors (#RGB or #RRGGBB or #RRGGBBAA)
+	if (trimmed.startsWith("#")) {
+		const hex = trimmed.slice(1);
+		let r = 0, g = 0, b = 0;
+		
+		if (hex.length === 3 && hex[0] && hex[1] && hex[2]) {
+			// #RGB -> #RRGGBB
+			r = parseInt(hex[0] + hex[0], 16);
+			g = parseInt(hex[1] + hex[1], 16);
+			b = parseInt(hex[2] + hex[2], 16);
+		} else if (hex.length === 6 || hex.length === 8) {
+			// #RRGGBB or #RRGGBBAA
+			r = parseInt(hex.slice(0, 2), 16);
+			g = parseInt(hex.slice(2, 4), 16);
+			b = parseInt(hex.slice(4, 6), 16);
+		} else {
+			return null;
+		}
+		
+		if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+			return {r, g, b};
+		}
+	}
+	
+	// Handle rgb(r, g, b) or rgba(r, g, b, a)
+	const rgbMatch = trimmed.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+	if (rgbMatch && rgbMatch[1] && rgbMatch[2] && rgbMatch[3]) {
+		return {
+			r: parseInt(rgbMatch[1], 10),
+			g: parseInt(rgbMatch[2], 10),
+			b: parseInt(rgbMatch[3], 10)
+		};
+	}
+	
+	return null;
+}
+
+/**
+ * Calculate Euclidean distance between two RGB colors.
+ */
+function colorDistance(c1: {r: number, g: number, b: number}, c2: {r: number, g: number, b: number}): number {
+	const dr = c1.r - c2.r;
+	const dg = c1.g - c2.g;
+	const db = c1.b - c2.b;
+	return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+/**
+ * Analyze a color and return a descriptive label.
+ * Returns a color name if it matches a known color, otherwise returns the hex code.
+ */
+function analyzeColor(colorValue: string): string {
+	const rgb = parseColorToRGB(colorValue);
+	if (!rgb) {
+		// If we can't parse it, return the original value
+		return colorValue;
+	}
+	
+	// Find the closest matching color name
+	let closestName = "";
+	let closestDistance = Infinity;
+	
+	for (const [name, namedRgb] of Object.entries(COLOR_NAMES)) {
+		const distance = colorDistance(rgb, namedRgb);
+		if (distance < closestDistance) {
+			closestDistance = distance;
+			closestName = name;
+		}
+	}
+	
+	// If the closest color is within threshold, return its name
+	if (closestDistance <= COLOR_MATCH_THRESHOLD) {
+		return closestName;
+	}
+	
+	// Otherwise, return the hex code
+	const hex = `#${rgb.r.toString(16).padStart(2, '0')}${rgb.g.toString(16).padStart(2, '0')}${rgb.b.toString(16).padStart(2, '0')}`;
+	return hex.toUpperCase();
+}
+
 /** Obsidian canvas preset 1–6: color label for settings dropdown (matches PRESET_HEX order). */
 const PRESET_COLORS: { value: CanvasColor; label: string }[] = [
 	{ value: "1", label: "Red" },
@@ -191,7 +290,8 @@ function addModelBlock(
 	containerEl: HTMLElement,
 	role: "orange" | "purple" | "red",
 	models: string[] | null,
-	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> }
+	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> },
+	warningCallback?: (message: string | null) => void
 ): void {
 	const s = plugin.settings;
 	const title = MODEL_BLOCK_TITLES[role];
@@ -270,7 +370,8 @@ function addModelBlock(
 		plugin,
 		role,
 		"Color",
-		"Node color on the canvas"
+		"Node color on the canvas",
+		warningCallback
 	);
 
 	updateSummaryText();
@@ -291,7 +392,8 @@ function addColorSetting(
 	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> },
 	role: NodeRole,
 	label: string,
-	desc: string
+	desc: string,
+	warningCallback?: (message: string | null) => void
 ): void {
 	const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
 	const current = plugin.settings[key] as CanvasColor;
@@ -307,17 +409,26 @@ function addColorSetting(
 
 	const swatchWrap = control.createSpan({ cls: "ztb-color-swatch-wrap" });
 	const swatch = swatchWrap.createSpan({ cls: "ztb-color-swatch" });
+	
+	// Generate dynamic label for current preset based on actual color
+	const getPresetLabel = (presetNum: string): string => {
+		const actualColor = getPresetColor(Number(presetNum) as 1 | 2 | 3 | 4 | 5 | 6);
+		return analyzeColor(actualColor);
+	};
+	
 	if (isPreset) {
 		setSwatchToPreset(swatch, presetValue);
-		swatch.setAttr("title", PRESET_COLORS.find((p) => p.value === presetValue)?.label ?? "Preset");
+		swatch.setAttr("title", getPresetLabel(presetValue));
 	} else {
 		setSwatchToCustom(swatch, customValue || "#888");
 		swatch.setAttr("title", customValue || "Custom");
 	}
 
 	const dropdown = control.createEl("select", { cls: "dropdown" });
+	// Generate dropdown options with dynamic labels based on actual colors
 	PRESET_COLORS.forEach((p) => {
-		const opt = dropdown.createEl("option", { text: p.label });
+		const dynamicLabel = getPresetLabel(p.value);
+		const opt = dropdown.createEl("option", { text: dynamicLabel });
 		opt.value = p.value;
 		if (p.value === presetValue) opt.selected = true;
 	});
@@ -331,14 +442,16 @@ function addColorSetting(
 			swatch.setAttr("title", customHex.value.trim() || "Custom");
 		} else {
 			setSwatchToPreset(swatch, v);
-			swatch.setAttr("title", PRESET_COLORS.find((x) => x.value === v)?.label ?? "Preset");
+			swatch.setAttr("title", getPresetLabel(v));
 		}
 	};
 	function checkColorConflict(newColorValue: string): void {
 		const other = getOtherRoleWithColor(plugin.settings, newColorValue, role);
-		if (other) {
+		if (other && warningCallback) {
 			const otherName = ROLE_DISPLAY_NAMES[other];
-			alert(`This color is already used by "${otherName}". Each node type should have a unique color so nodes are easy to tell apart on the canvas.`);
+			warningCallback(`⚠ This color is already used by "${otherName}". Each node type should have a unique color so nodes are easy to tell apart on the canvas.`);
+		} else if (!other && warningCallback) {
+			warningCallback(null);
 		}
 	}
 
@@ -397,6 +510,25 @@ export class ZettelSettingTab extends PluginSettingTab {
 		 * - Consistent spacing and grouping
 		 */
 
+		// Warning banner for color conflicts (hidden by default)
+		const warningBanner = containerEl.createDiv({ cls: "ztb-color-warning-banner" });
+		warningBanner.style.display = "none";
+		warningBanner.style.backgroundColor = "var(--background-modifier-error)";
+		warningBanner.style.color = "var(--text-on-accent)";
+		warningBanner.style.padding = "12px 16px";
+		warningBanner.style.marginBottom = "16px";
+		warningBanner.style.borderRadius = "4px";
+		warningBanner.style.border = "1px solid var(--background-modifier-error-border)";
+
+		const warningCallback = (message: string | null) => {
+			if (message) {
+				warningBanner.setText(message);
+				warningBanner.style.display = "block";
+			} else {
+				warningBanner.style.display = "none";
+			}
+		};
+
 		// Installation & Dependencies section - auto-collapses when everything is installed
 		this.addInstallationSection(containerEl);
 
@@ -405,7 +537,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 		executionSection.createEl("h4", { text: "Model Configuration", cls: "ztb-section-title" });
 		const executionHint = executionSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
 		executionHint.setText("Configure AI models and execution settings. Right-click a node on the canvas and choose Run node or Run chain to execute.");
-		
+
 		const ollamaContainer = executionSection.createDiv({ cls: "ztb-ollama-settings" });
 		const loadingEl = ollamaContainer.createDiv({ cls: "ztb-ollama-loading" });
 		loadingEl.setText("Loading Ollama models…");
@@ -417,9 +549,9 @@ export class ZettelSettingTab extends PluginSettingTab {
 				fallback.createEl("p", { text: "Ollama not reachable or no models installed. Enter model names manually or check Installation & Dependencies section above." });
 			}
 			// One collapsible block per model role: primary (expanded), secondary and tertiary (collapsed)
-			addModelBlock(ollamaContainer, "orange", models.length === 0 ? null : models, this.plugin);
-			addModelBlock(ollamaContainer, "purple", models.length === 0 ? null : models, this.plugin);
-			addModelBlock(ollamaContainer, "red", models.length === 0 ? null : models, this.plugin);
+			addModelBlock(ollamaContainer, "orange", models.length === 0 ? null : models, this.plugin, warningCallback);
+			addModelBlock(ollamaContainer, "purple", models.length === 0 ? null : models, this.plugin, warningCallback);
+			addModelBlock(ollamaContainer, "red", models.length === 0 ? null : models, this.plugin, warningCallback);
 		})();
 
 		new Setting(executionSection)
@@ -448,27 +580,30 @@ export class ZettelSettingTab extends PluginSettingTab {
 					this.plugin.settings.showNodeRoleLabels = value;
 					await this.plugin.saveSettings();
 				}));
-		
+
 		addColorSetting(
 			displaySection,
 			this.plugin,
 			"blue",
 			"Python node color",
-			"Color for Python execution nodes on the canvas"
+			"Color for Python execution nodes on the canvas",
+			warningCallback
 		);
 		addColorSetting(
 			displaySection,
 			this.plugin,
 			"yellow",
 			"Text node color",
-			"Color for text (input) nodes: pass-through text, no AI processing"
+			"Color for text (input) nodes: pass-through text, no AI processing",
+			warningCallback
 		);
 		addColorSetting(
 			displaySection,
 			this.plugin,
 			"green",
 			"Output node color",
-			"Color for auto-generated output nodes on the canvas"
+			"Color for auto-generated output nodes on the canvas",
+			warningCallback
 		);
 
 		// Canvas Templates section
@@ -502,12 +637,12 @@ export class ZettelSettingTab extends PluginSettingTab {
 
 	private addInstallationSection(containerEl: HTMLElement): void {
 		const installSection = containerEl.createDiv({ cls: "ztb-settings-section" });
-		
+
 		// Create collapsible details element for the entire installation section
 		const details = installSection.createEl("details", { cls: "ztb-install-section" });
 		const summary = details.createEl("summary", { cls: "ztb-section-title-clickable" });
 		summary.createEl("h4", { text: "Installation & Dependencies", cls: "ztb-section-title-inline" });
-		
+
 		const content = details.createDiv({ cls: "ztb-install-section-content" });
 
 		const installHint = content.createDiv({ cls: "ztb-settings-hint setting-item-description" });
@@ -595,7 +730,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 		const modelsDetails = content.createEl("details", { cls: "ztb-models-subsection" });
 		const modelsSummary = modelsDetails.createEl("summary", { cls: "ztb-subsection-summary" });
 		modelsSummary.createEl("h5", { text: "Recommended Models", cls: "ztb-subsection-title-inline" });
-		
+
 		const modelsContent = modelsDetails.createDiv({ cls: "ztb-models-subsection-content" });
 		const modelsHint = modelsContent.createDiv({ cls: "ztb-settings-hint setting-item-description" });
 		modelsHint.setText("Download these models for optimal performance. Each model is optimized for different tasks.");
@@ -635,7 +770,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 			// Check if all dependencies are satisfied
 			const pythonOk = pythonCheck.installed;
 			const ollamaOk = ollamaCheck.installed && ollamaCheck.running;
-			
+
 			// Check if all recommended models are installed
 			let allModelsInstalled = true;
 			for (const { modelName } of modelStatusElements) {
@@ -648,7 +783,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 
 			// Auto-collapse recommended models section if all are installed
 			modelsDetails.open = !allModelsInstalled;
-			
+
 			// Update models summary to show status
 			if (allModelsInstalled) {
 				modelsSummary.setText("Recommended Models — All installed ✓");
@@ -659,7 +794,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 			// Auto-collapse main installation section if Python + Ollama are ready
 			// Keep it open if there are issues that need attention
 			details.open = !(pythonOk && ollamaOk);
-			
+
 			// Update main summary to show overall status
 			if (pythonOk && ollamaOk) {
 				summary.setText("Installation & Dependencies — Ready ✓");
