@@ -278,11 +278,19 @@ async function runSingleNode(
 	if (!node) return "";
 	const role = getNodeRole(node, settings);
 	if (!role || role === "yellow" || role === "green") {
-		// Yellow = text (input pass-through): use node content as result
+		// Yellow = text (input pass-through): merge parent results with own content, same as AI/Python nodes
 		if (role === "yellow") {
-			const content = await getNodeContent(node, app.vault);
-			setNodeResult(canvasKey, nodeId, content);
-			return content;
+			const incoming = getIncomingEdgesWithLabels(nodeId, data);
+			const nodeInput = await getNodeContent(node, app.vault);
+			const { concatenatedPart, template } = buildInputWithVariables(
+				canvasKey,
+				nodeInput,
+				incoming
+			);
+			const fullContent =
+				concatenatedPart.length > 0 ? `${concatenatedPart}\n\n---\n\n${template}` : template;
+			setNodeResult(canvasKey, nodeId, fullContent);
+			return fullContent;
 		}
 		return "";
 	}
@@ -448,6 +456,25 @@ function randomId(): string {
 	return "output-" + Date.now() + "-" + Math.random().toString(36).slice(2, 11);
 }
 
+/** Sides of a node for edge connection (Obsidian canvas). */
+type NodeSide = "top" | "right" | "bottom" | "left";
+
+/** Preferred order for auxiliary edges (prompt/thinking): use left/right to avoid input (top) and output (bottom). */
+const AUXILIARY_EDGE_SIDE_ORDER: NodeSide[] = ["left", "right", "top", "bottom"];
+
+/** Pick a side of sourceNode that is not already used by edges from/to that node. Used so prompt/thinking connect on a free side. */
+function chooseFreeSideForAuxiliaryEdge(data: CanvasData, sourceNodeId: string): NodeSide {
+	const used = new Set<NodeSide>();
+	for (const e of data.edges) {
+		if (e.fromNode === sourceNodeId && e.fromSide) used.add(e.fromSide as NodeSide);
+		if (e.toNode === sourceNodeId && e.toSide) used.add(e.toSide as NodeSide);
+	}
+	for (const side of AUXILIARY_EDGE_SIDE_ORDER) {
+		if (!used.has(side)) return side;
+	}
+	return "left";
+}
+
 /** Options for ensureOutputNodeAndEdge: optional prompt and thinking to show in separate nodes. */
 interface EnsureOutputOptions {
 	fullPrompt?: string;
@@ -518,19 +545,6 @@ function ensureOutputNodeAndEdge(
 	} else {
 		const newNodeId = randomId();
 		resolvedOutputId = newNodeId;
-		// #region agent log
-		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				location: "runner.ts:ensureOutputNodeAndEdge(new output)",
-				message: "Writing new output node position",
-				data: { hypothesisId: "H5", sourceId: sourceNode.id, nodeId: newNodeId, x: chosenX, y: chosenY, width, height },
-				timestamp: Date.now(),
-				sessionId: "debug-session",
-			}),
-		}).catch(() => {});
-		// #endregion
 		const newTextNode: CanvasTextData = {
 			id: newNodeId,
 			type: "text",
@@ -555,6 +569,7 @@ function ensureOutputNodeAndEdge(
 
 	// 2. Ensure thinking node (above output) when setting on and thinking present
 	if (settings.showThinkingNode && thinking != null && thinking.length > 0) {
+		const thinkingSide = chooseFreeSideForAuxiliaryEdge(data, sourceNode.id);
 		const thinkingDefaultY = outputY - height - GREEN_NODE_PADDING;
 		const thinkingExclude = [sourceNode.id, resolvedOutputId, promptId].filter((id): id is string => id != null);
 		const { x: tx, y: ty } = chooseOutputPositionXY(
@@ -589,7 +604,9 @@ function ensureOutputNodeAndEdge(
 				data.edges.push({
 					id: randomId(),
 					fromNode: sourceNode.id,
+					fromSide: thinkingSide,
 					toNode: thinkingId,
+					toSide: thinkingSide === "left" ? "right" : thinkingSide === "right" ? "left" : thinkingSide === "top" ? "bottom" : "top",
 					label: EDGE_LABEL_THINKING,
 				});
 			}
@@ -608,7 +625,9 @@ function ensureOutputNodeAndEdge(
 			data.edges.push({
 				id: randomId(),
 				fromNode: sourceNode.id,
+				fromSide: thinkingSide,
 				toNode: newId,
+				toSide: thinkingSide === "left" ? "right" : thinkingSide === "right" ? "left" : thinkingSide === "top" ? "bottom" : "top",
 				label: EDGE_LABEL_THINKING,
 			});
 		}
@@ -616,6 +635,7 @@ function ensureOutputNodeAndEdge(
 
 	// 3. Ensure prompt node (above thinking or output) when setting on and fullPrompt present
 	if (settings.showPromptInOutput && fullPrompt != null && fullPrompt.length > 0) {
+		const promptSide = chooseFreeSideForAuxiliaryEdge(data, sourceNode.id);
 		const thinkingNodeId = settings.showThinkingNode && thinking ? findAuxiliaryNodeForSource(data, sourceNode.id, EDGE_LABEL_THINKING) : null;
 		const anchorNode = thinkingNodeId ? getNodeById(data, thinkingNodeId) : outputNode;
 		const anchorY = anchorNode && "y" in anchorNode ? (anchorNode as { y: number }).y : outputY;
@@ -632,6 +652,7 @@ function ensureOutputNodeAndEdge(
 			promptExclude
 		);
 		const promptColor = shadeColor(settings.colorGreen, 0.25);
+		const promptToSide = promptSide === "left" ? "right" : promptSide === "right" ? "left" : promptSide === "top" ? "bottom" : "top";
 
 		if (promptId) {
 			const pn = getNodeById(data, promptId);
@@ -653,7 +674,9 @@ function ensureOutputNodeAndEdge(
 				data.edges.push({
 					id: randomId(),
 					fromNode: sourceNode.id,
+					fromSide: promptSide,
 					toNode: promptId,
+					toSide: promptToSide,
 					label: EDGE_LABEL_PROMPT,
 				});
 			}
@@ -672,7 +695,9 @@ function ensureOutputNodeAndEdge(
 			data.edges.push({
 				id: randomId(),
 				fromNode: sourceNode.id,
+				fromSide: promptSide,
 				toNode: newId,
+				toSide: promptToSide,
 				label: EDGE_LABEL_PROMPT,
 			});
 		}
