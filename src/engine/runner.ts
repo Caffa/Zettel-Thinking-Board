@@ -520,21 +520,12 @@ export async function runNode(
 		}
 	}
 	try {
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'runner.ts:523',message:'Setting running node ID (before)',data:{canvasKey,nodeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H5'})}).catch(()=>{});
-		// #endregion
 		setRunningNodeId(canvasKey, nodeId);
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'runner.ts:526',message:'Running node ID set (after)',data:{canvasKey,nodeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H5'})}).catch(()=>{});
-		// #endregion
 		await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nodeId, liveCanvas);
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, message: e instanceof Error ? e.message : String(e) };
 	} finally {
-		// #region agent log
-		fetch('http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'runner.ts:529',message:'Clearing running node ID',data:{canvasKey,nodeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H5'})}).catch(()=>{});
-		// #endregion
 		setRunningNodeId(canvasKey, null);
 	}
 }
