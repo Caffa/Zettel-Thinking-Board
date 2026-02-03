@@ -94,6 +94,22 @@ obsidian_log(f"Memory size: {len(memory)}")
 ```
 This allows you to build complex data accumulation workflows.
 
+## Behaviour and limitations
+
+*   **Execution graph must be a DAG:** Run Chain and Run entire canvas require the execution graph (arrows between prompts and code, ignoring `output` edges) to have no cycles. If the graph contains a cycle, the plugin reports: *"Execution graph contains a cycle; fix connections and try again."*
+*   **Output placement:** Green (output) nodes are placed below the source node with simple collision avoidance. In very dense layouts, the output note may still overlap existing nodes if no free slot is found in the search area.
+
+## Screenshot examples
+
+These example canvases are useful for documentation or marketing screenshots:
+
+1. **Simple chain (quick start)** — One Orange → one Blue → one Green (auto). Orange: "Write a haiku about rust." Blue: e.g. `print(len(input.split()))`. Use for README Quick Start and Run chain.
+2. **Edge variable injection** — Orange → (edge label `draft`) → Purple; Purple: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." After run, show edge label with "(injected)". Use for the Edge variable injection section.
+3. **Collision avoidance** — Two columns: left column one Orange with Green below; right column another Orange. Run the right Orange and show the new Green placed to the side or below without overlapping. Use for auto-layout / collision behaviour.
+4. **Multi-root / branching** — Two roots (e.g. Orange A and Orange B) feeding into one Blue (or two Blues merging). Run entire canvas to show correct topological order from all roots.
+5. **Python state (persistent kernel)** — Blue A: `memory = []` → Blue B: `memory.append(input); obsidian_log(str(len(memory)))`. Use for Advanced: Python State and side panel console.
+6. **Dismiss output** — Canvas with several Green output nodes; context menu "Dismiss output" and/or toolbar "Dismiss all output" (before/after). Use for README or settings/UX.
+
 ## Development
 
 *   **Install:** `npm install` (use `npm install --legacy-peer-deps` if needed for Vitest).

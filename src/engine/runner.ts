@@ -1,4 +1,5 @@
 import type {App} from "obsidian";
+import {Notice} from "obsidian";
 import {
 	EDGE_LABEL_OUTPUT,
 	findOutputNodeForSource,
@@ -25,7 +26,7 @@ import {
 	setEdgeModes,
 	setRunningNodeId,
 } from "./state";
-import type {NodeRole, ZettelPluginSettings} from "../settings";
+import {DEFAULT_SETTINGS, type NodeRole, type ZettelPluginSettings} from "../settings";
 
 type EdgeInputMode = "inject" | "concatenate";
 
@@ -58,12 +59,15 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 	return false;
 }
 
+/** Result of topological sort: either a valid order or cycle detected. */
+type TopoResult = { order: string[] } | { cycle: true };
+
 /** Topological order of node ids (only nodes that are ancestors of target; ignores output edges). */
 function topologicalOrderToTarget(
 	data: CanvasData,
 	targetId: string,
 	settings: ZettelPluginSettings
-): string[] {
+): TopoResult {
 	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
 	const nodeIds = new Set<string>();
 	const stack = [targetId];
@@ -79,7 +83,7 @@ function topologicalOrderToTarget(
 }
 
 /** Topological order of all nodes reachable from any root (ignores output edges). */
-function topologicalOrderFull(data: CanvasData, settings: ZettelPluginSettings): string[] {
+function topologicalOrderFull(data: CanvasData, settings: ZettelPluginSettings): TopoResult {
 	const roots = getRootIds(data);
 	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
 	const nodeIds = new Set<string>();
@@ -102,7 +106,7 @@ function topologicalSort(
 	execEdges: CanvasEdgeData[],
 	nodeIds: Set<string>,
 	settings: ZettelPluginSettings
-): string[] {
+): TopoResult {
 	const inDegree = new Map<string, number>();
 	for (const id of nodeIds) inDegree.set(id, 0);
 	for (const e of execEdges) {
@@ -125,7 +129,10 @@ function topologicalSort(
 		}
 		sortQueueByNonAIFirst(queue, data, settings);
 	}
-	return order;
+	if (order.length !== nodeIds.size) {
+		return { cycle: true };
+	}
+	return { order };
 }
 
 /** Sort ready queue: non-AI (Python, yellow) first for early output, then by y. */
@@ -211,7 +218,8 @@ async function updateEdgeLabelsAndSave(
 	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
-	await saveCanvasData(vault, canvasFilePath, data);
+	const saved = await saveCanvasData(vault, canvasFilePath, data);
+	if (!saved) new Notice("Failed to save canvas.");
 }
 
 /** Run a single node: get input + parent context (concatenate or {{var:name}}), call LLM or Python, store result. */
@@ -248,7 +256,14 @@ async function runSingleNode(
 
 	if (role === "orange") {
 		const model = settings.ollamaOrangeModel || "llama2";
-		const result = await ollamaGenerate({ model, prompt: fullPrompt, stream: false });
+		const temperature = settings.ollamaOrangeTemperature ?? DEFAULT_SETTINGS.ollamaOrangeTemperature;
+		const num_predict = settings.ollamaOrangeNumPredict ?? DEFAULT_SETTINGS.ollamaOrangeNumPredict;
+		const result = await ollamaGenerate({
+			model,
+			prompt: fullPrompt,
+			stream: false,
+			options: { temperature, num_predict },
+		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
@@ -256,7 +271,14 @@ async function runSingleNode(
 	}
 	if (role === "purple") {
 		const model = settings.ollamaPurpleModel || "llama2";
-		const result = await ollamaGenerate({ model, prompt: fullPrompt, stream: false });
+		const temperature = settings.ollamaPurpleTemperature ?? DEFAULT_SETTINGS.ollamaPurpleTemperature;
+		const num_predict = settings.ollamaPurpleNumPredict ?? DEFAULT_SETTINGS.ollamaPurpleNumPredict;
+		const result = await ollamaGenerate({
+			model,
+			prompt: fullPrompt,
+			stream: false,
+			options: { temperature, num_predict },
+		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
@@ -264,7 +286,14 @@ async function runSingleNode(
 	}
 	if (role === "red") {
 		const model = settings.ollamaRedModel || "llama2";
-		const result = await ollamaGenerate({ model, prompt: fullPrompt, stream: false });
+		const temperature = settings.ollamaRedTemperature ?? DEFAULT_SETTINGS.ollamaRedTemperature;
+		const num_predict = settings.ollamaRedNumPredict ?? DEFAULT_SETTINGS.ollamaRedNumPredict;
+		const result = await ollamaGenerate({
+			model,
+			prompt: fullPrompt,
+			stream: false,
+			options: { temperature, num_predict },
+		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
@@ -289,6 +318,8 @@ const OUTPUT_COLLISION_STEP = 80;
 const OUTPUT_COLLISION_MAX_VERTICAL = 400;
 /** Step (px) between candidate y positions when avoiding vertical collisions. */
 const OUTPUT_COLLISION_VERTICAL_STEP = 60;
+/** Min gap (px) between output box and other nodes; placement avoids coming within this distance. */
+const OUTPUT_COLLISION_BUFFER = 24;
 
 function rectanglesOverlap(
 	a: { x: number; y: number; width: number; height: number },
@@ -320,9 +351,14 @@ function chooseOutputPositionXY(
 		box.y = y;
 		for (const node of data.nodes) {
 			if (excludeIds.has(node.id)) continue;
-			if (rectanglesOverlap(box, { x: node.x, y: node.y, width: node.width, height: node.height })) {
-				return false;
-			}
+			// Expand other node by buffer so we keep at least OUTPUT_COLLISION_BUFFER gap
+			const expanded = {
+				x: node.x - OUTPUT_COLLISION_BUFFER,
+				y: node.y - OUTPUT_COLLISION_BUFFER,
+				width: node.width + 2 * OUTPUT_COLLISION_BUFFER,
+				height: node.height + 2 * OUTPUT_COLLISION_BUFFER,
+			};
+			if (rectanglesOverlap(box, expanded)) return false;
 		}
 		return true;
 	}
@@ -458,6 +494,8 @@ export async function runNode(
 	}
 }
 
+const CYCLE_ERROR_MESSAGE = "Execution graph contains a cycle; fix connections and try again.";
+
 /** Run all nodes reachable from any root, in topological order. */
 export async function runEntireCanvas(
 	app: App,
@@ -467,7 +505,9 @@ export async function runEntireCanvas(
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
-	const order = topologicalOrderFull(data, settings);
+	const topo = topologicalOrderFull(data, settings);
+	if ("cycle" in topo) return { ok: false, message: CYCLE_ERROR_MESSAGE };
+	const order = topo.order;
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
 		for (const nid of order) {
@@ -497,7 +537,9 @@ export async function runChain(
 	const roots = getRootIds(data);
 	const rootsReachingCurrent = roots.filter((r) => canReach(data, r, nodeId));
 	if (rootsReachingCurrent.length === 0) return { ok: false, message: "No root reaches this node." };
-	const order = topologicalOrderToTarget(data, nodeId, settings);
+	const topo = topologicalOrderToTarget(data, nodeId, settings);
+	if ("cycle" in topo) return { ok: false, message: CYCLE_ERROR_MESSAGE };
+	const order = topo.order;
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
 		for (const nid of order) {
@@ -532,7 +574,8 @@ export async function dismissOutput(
 	);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
-	await saveCanvasData(vault, canvasFilePath, data);
+	const saved = await saveCanvasData(vault, canvasFilePath, data);
+	if (!saved) new Notice("Failed to save canvas.");
 }
 
 /** Remove all Green output nodes and their output edges on the canvas; mutates data and saves. */
@@ -552,5 +595,6 @@ export async function dismissAllOutput(
 	data.edges = data.edges.filter((e) => parseEdgeVariableName(e.label) !== EDGE_LABEL_OUTPUT);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
-	await saveCanvasData(vault, canvasFilePath, data);
+	const saved = await saveCanvasData(vault, canvasFilePath, data);
+	if (!saved) new Notice("Failed to save canvas.");
 }

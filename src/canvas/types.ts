@@ -137,13 +137,19 @@ export function findOutputNodeForSource(
 	if (!greenColor) return null;
 	const expectedY = source.y + source.height + GREEN_NODE_PADDING;
 	const toleranceAbove = 30; // allow small layout drift above default
+	const candidates: { id: string; centerY: number }[] = [];
 	for (const node of data.nodes) {
 		if (node.id === sourceNodeId) continue;
 		if (normalizeColor(node.color) !== greenColor) continue;
-		// Same x (or close), and y at or below expected (collision avoidance may place it lower)
 		if (Math.abs(node.x - source.x) > 50) continue;
 		if (node.y < expectedY - toleranceAbove || node.y > expectedY + OUTPUT_POSITION_FALLBACK_MAX_Y) continue;
-		return node.id;
+		const centerY = node.y + (node.height ?? 0) / 2;
+		candidates.push({ id: node.id, centerY });
 	}
-	return null;
+	if (candidates.length === 0) return null;
+	// Prefer the green whose center is closest to expectedY (avoids wrong match when sources are stacked)
+	const best = candidates.reduce((a, b) =>
+		Math.abs(a.centerY - expectedY) <= Math.abs(b.centerY - expectedY) ? a : b
+	);
+	return best.id;
 }

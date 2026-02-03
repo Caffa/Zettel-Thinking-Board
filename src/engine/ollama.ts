@@ -18,17 +18,33 @@ export async function fetchOllamaModels(): Promise<string[]> {
 	}
 }
 
+/** Runtime options for Ollama /api/generate (sent under the "options" key). */
+export interface OllamaGenerateRequestOptions {
+	temperature?: number;
+	num_predict?: number;
+	top_p?: number;
+}
+
 export interface OllamaGenerateOptions {
 	model: string;
 	prompt: string;
 	stream?: boolean;
+	options?: OllamaGenerateRequestOptions;
 }
 
 /** Call Ollama /api/generate and return the response string. */
 export async function ollamaGenerate(options: OllamaGenerateOptions): Promise<string> {
-	const {model, prompt, stream = false} = options;
+	const {model, prompt, stream = false, options: requestOptions} = options;
 	const url = `${OLLAMA_BASE}/api/generate`;
-	const body = JSON.stringify({ model, prompt, stream });
+	const payload: { model: string; prompt: string; stream: boolean; options?: OllamaGenerateRequestOptions } = {
+		model,
+		prompt,
+		stream,
+	};
+	if (requestOptions && Object.keys(requestOptions).length > 0) {
+		payload.options = requestOptions;
+	}
+	const body = JSON.stringify(payload);
 	const res = await fetch(url, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },

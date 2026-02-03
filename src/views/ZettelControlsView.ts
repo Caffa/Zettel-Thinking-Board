@@ -1,6 +1,7 @@
 import {ItemView, Notice, Setting, WorkspaceLeaf} from "obsidian";
 import type {IZettelThinkingBoardPlugin} from "../types";
 import {terminateKernel} from "../engine/kernelManager";
+import {DEFAULT_SETTINGS} from "../settings";
 
 export const ZETTEL_CONTROLS_VIEW_TYPE = "zettel-controls";
 
@@ -42,6 +43,29 @@ export class ZettelControlsView extends ItemView {
 					})
 			);
 		new Setting(el)
+			.setName("Temperature (primary)")
+			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
+			.addSlider((slider) => slider
+				.setLimits(0, 2, 0.1)
+				.setValue(Number(this.plugin.settings.ollamaOrangeTemperature) ?? DEFAULT_SETTINGS.ollamaOrangeTemperature)
+				.onChange(async (value) => {
+					this.plugin.settings.ollamaOrangeTemperature = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(el)
+			.setName("Max tokens (primary)")
+			.setDesc("Max tokens to generate (-1 = no limit).")
+			.addText((text) => text
+				.setPlaceholder("-1")
+				.setValue(String(this.plugin.settings.ollamaOrangeNumPredict ?? DEFAULT_SETTINGS.ollamaOrangeNumPredict))
+				.onChange(async (value) => {
+					const num = parseInt(value, 10);
+					if (!Number.isNaN(num) && num >= -1) {
+						this.plugin.settings.ollamaOrangeNumPredict = num;
+						await this.plugin.saveSettings();
+					}
+				}));
+		new Setting(el)
 			.setName("Model node (secondary)")
 			.setDesc("Ollama model for secondary model nodes")
 			.addText((text) =>
@@ -54,6 +78,29 @@ export class ZettelControlsView extends ItemView {
 					})
 			);
 		new Setting(el)
+			.setName("Temperature (secondary)")
+			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
+			.addSlider((slider) => slider
+				.setLimits(0, 2, 0.1)
+				.setValue(Number(this.plugin.settings.ollamaPurpleTemperature) ?? DEFAULT_SETTINGS.ollamaPurpleTemperature)
+				.onChange(async (value) => {
+					this.plugin.settings.ollamaPurpleTemperature = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(el)
+			.setName("Max tokens (secondary)")
+			.setDesc("Max tokens to generate (-1 = no limit).")
+			.addText((text) => text
+				.setPlaceholder("-1")
+				.setValue(String(this.plugin.settings.ollamaPurpleNumPredict ?? DEFAULT_SETTINGS.ollamaPurpleNumPredict))
+				.onChange(async (value) => {
+					const num = parseInt(value, 10);
+					if (!Number.isNaN(num) && num >= -1) {
+						this.plugin.settings.ollamaPurpleNumPredict = num;
+						await this.plugin.saveSettings();
+					}
+				}));
+		new Setting(el)
 			.setName("Model node (tertiary)")
 			.setDesc("Ollama model for tertiary model nodes")
 			.addText((text) =>
@@ -65,6 +112,29 @@ export class ZettelControlsView extends ItemView {
 						await this.plugin.saveSettings();
 					})
 			);
+		new Setting(el)
+			.setName("Temperature (tertiary)")
+			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
+			.addSlider((slider) => slider
+				.setLimits(0, 2, 0.1)
+				.setValue(Number(this.plugin.settings.ollamaRedTemperature) ?? DEFAULT_SETTINGS.ollamaRedTemperature)
+				.onChange(async (value) => {
+					this.plugin.settings.ollamaRedTemperature = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(el)
+			.setName("Max tokens (tertiary)")
+			.setDesc("Max tokens to generate (-1 = no limit).")
+			.addText((text) => text
+				.setPlaceholder("-1")
+				.setValue(String(this.plugin.settings.ollamaRedNumPredict ?? DEFAULT_SETTINGS.ollamaRedNumPredict))
+				.onChange(async (value) => {
+					const num = parseInt(value, 10);
+					if (!Number.isNaN(num) && num >= -1) {
+						this.plugin.settings.ollamaRedNumPredict = num;
+						await this.plugin.saveSettings();
+					}
+				}));
 
 		// Kernel controls
 		el.createEl("h4", { text: "Kernel controls", cls: "ztb-section-title" });
