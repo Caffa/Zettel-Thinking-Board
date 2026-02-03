@@ -2,7 +2,7 @@ import type {Vault} from "obsidian";
 import {loadCanvasData} from "./nodes";
 import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
-import {getPresetColor, getRoleLabel} from "../settings";
+import {COLOR_ROLES, getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
 import {getCanvasKey, getEdgeMode, getRunningNodeId} from "../engine/state";
 
@@ -14,8 +14,6 @@ const EDGE_MODE_DATA_ATTR = "data-ztb-edge-id";
 const EDGE_MODE_STATE_ATTR = "data-ztb-edge-state";
 const EDGE_MODE_ICON_CLASS = "ztb-edge-mode-icon";
 type EdgeDisplayState = "running" | "inject" | "concatenate";
-const ROLES: NodeRole[] = ["red", "orange", "purple", "blue", "yellow", "green"];
-
 /** Try to get a canvas node's root DOM element from the live canvas (Obsidian uses .canvas-node, no data-id). */
 function getNodeElFromCanvas(canvas: LiveCanvas, nodeId: string): HTMLElement | null {
 	const nodes = canvas.nodes;
@@ -88,7 +86,7 @@ function createLegendSwatch(color: CanvasColor): HTMLElement {
 	return swatch;
 }
 
-/** Build and append the color legend to the canvas container (vanilla DOM, no innerHTML). */
+/** Build and append the legend to the canvas container (vanilla DOM, no innerHTML). Order: primary → tertiary, then Python, Comment, Output. */
 function syncCanvasLegend(containerEl: HTMLElement, settings: ZettelPluginSettings): void {
 	clearCanvasLegend(containerEl);
 	if (!settings.showNodeRoleLabels) return;
@@ -96,9 +94,9 @@ function syncCanvasLegend(containerEl: HTMLElement, settings: ZettelPluginSettin
 	legend.setAttribute("class", LEGEND_CLASS);
 	const title = document.createElement("div");
 	title.setAttribute("class", "ztb-legend-title");
-	title.textContent = "Colors";
+	title.textContent = "Legend";
 	legend.appendChild(title);
-	for (const role of ROLES) {
+	for (const role of COLOR_ROLES) {
 		const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
 		const color = (settings[key] as CanvasColor) ?? "";
 		const row = document.createElement("div");

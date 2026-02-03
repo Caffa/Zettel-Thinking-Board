@@ -7,6 +7,7 @@ import type {
 	CanvasTextData,
 } from "obsidian/canvas";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
+import {COLOR_ROLES} from "../settings";
 
 export type {AllCanvasNodeData, CanvasData, CanvasEdgeData, CanvasFileData, CanvasNodeData, CanvasTextData};
 
@@ -22,8 +23,7 @@ export function normalizeColor(c: CanvasColor | undefined): string {
 export function getNodeRole(node: { color?: CanvasColor }, settings: ZettelPluginSettings): NodeRole | null {
 	const nodeColor = normalizeColor(node.color);
 	if (!nodeColor) return null;
-	const roles: NodeRole[] = ["red", "orange", "purple", "blue", "yellow", "green"];
-	for (const role of roles) {
+	for (const role of COLOR_ROLES) {
 		const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
 		const settingColor = normalizeColor(settings[key] as CanvasColor | undefined);
 		if (settingColor && nodeColor === settingColor) return role;
@@ -118,6 +118,9 @@ export function getFileNodePath(node: CanvasFileData): string {
 /** Fixed padding between source node and its Green output node (Part 1). */
 export const GREEN_NODE_PADDING = 20;
 
+/** Max vertical offset (px) below default placement when finding output by position; must match runner collision range. */
+export const OUTPUT_POSITION_FALLBACK_MAX_Y = 450;
+
 /** Find the Green (output) node for a given source node. Edge-first (label "output"), then position fallback. */
 export function findOutputNodeForSource(
 	data: CanvasData,
@@ -133,13 +136,13 @@ export function findOutputNodeForSource(
 	const greenColor = normalizeColor(settings.colorGreen as CanvasColor | undefined);
 	if (!greenColor) return null;
 	const expectedY = source.y + source.height + GREEN_NODE_PADDING;
-	const tolerance = 30; // allow small layout drift
+	const toleranceAbove = 30; // allow small layout drift above default
 	for (const node of data.nodes) {
 		if (node.id === sourceNodeId) continue;
 		if (normalizeColor(node.color) !== greenColor) continue;
-		// Same x (or close), and y at or near expected
+		// Same x (or close), and y at or below expected (collision avoidance may place it lower)
 		if (Math.abs(node.x - source.x) > 50) continue;
-		if (node.y < expectedY - tolerance || node.y > expectedY + tolerance) continue;
+		if (node.y < expectedY - toleranceAbove || node.y > expectedY + OUTPUT_POSITION_FALLBACK_MAX_Y) continue;
 		return node.id;
 	}
 	return null;

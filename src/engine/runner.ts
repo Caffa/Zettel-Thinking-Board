@@ -285,6 +285,10 @@ async function runSingleNode(
 const OUTPUT_COLLISION_MAX_RADIUS = 500;
 /** Step (px) between candidate x positions when avoiding collisions. */
 const OUTPUT_COLLISION_STEP = 80;
+/** Max vertical offset (px) below default placement when avoiding collisions. */
+const OUTPUT_COLLISION_MAX_VERTICAL = 400;
+/** Step (px) between candidate y positions when avoiding vertical collisions. */
+const OUTPUT_COLLISION_VERTICAL_STEP = 60;
 
 function rectanglesOverlap(
 	a: { x: number; y: number; width: number; height: number },
@@ -298,23 +302,22 @@ function rectanglesOverlap(
 	);
 }
 
-/** Choose an x for the output box to avoid overlapping other nodes; tries defaultX then right then left within maxRadius. */
-function chooseOutputPosition(
+/** Choose (x, y) for the output box to avoid overlapping other nodes. Tries default position, then shifts horizontally, then downward. */
+function chooseOutputPositionXY(
 	data: CanvasData,
 	sourceNodeId: string,
 	outNodeId: string | null,
 	defaultX: number,
-	y: number,
+	defaultY: number,
 	width: number,
-	height: number,
-	maxRadius: number,
-	step: number
-): number {
+	height: number
+): { x: number; y: number } {
 	const excludeIds = new Set<string>([sourceNodeId]);
 	if (outNodeId) excludeIds.add(outNodeId);
-	const box = { x: 0, y, width, height };
-	function tryX(x: number): boolean {
+	const box = { x: 0, y: 0, width, height };
+	function tryPosition(x: number, y: number): boolean {
 		box.x = x;
+		box.y = y;
 		for (const node of data.nodes) {
 			if (excludeIds.has(node.id)) continue;
 			if (rectanglesOverlap(box, { x: node.x, y: node.y, width: node.width, height: node.height })) {
@@ -323,12 +326,21 @@ function chooseOutputPosition(
 		}
 		return true;
 	}
-	if (tryX(defaultX)) return defaultX;
-	for (let offset = step; offset <= maxRadius; offset += step) {
-		if (tryX(defaultX + offset)) return defaultX + offset;
-		if (tryX(defaultX - offset)) return defaultX - offset;
+	for (let dy = 0; dy <= OUTPUT_COLLISION_MAX_VERTICAL; dy += OUTPUT_COLLISION_VERTICAL_STEP) {
+		const candidateY = defaultY + dy;
+		for (const dx of xOffsets()) {
+			if (tryPosition(defaultX + dx, candidateY)) return { x: defaultX + dx, y: candidateY };
+		}
 	}
-	return defaultX;
+	return { x: defaultX, y: defaultY };
+}
+
+function* xOffsets(): Generator<number> {
+	yield 0;
+	for (let offset = OUTPUT_COLLISION_STEP; offset <= OUTPUT_COLLISION_MAX_RADIUS; offset += OUTPUT_COLLISION_STEP) {
+		yield offset;
+		yield -offset;
+	}
 }
 
 /** Generate a unique id for new canvas nodes/edges. */
@@ -347,20 +359,18 @@ function ensureOutputNodeAndEdge(
 	settings: ZettelPluginSettings
 ): void {
 	const outId = findOutputNodeForSource(data, sourceNode.id, settings);
-	const y = sourceNode.y + sourceNode.height + GREEN_NODE_PADDING;
+	const defaultY = sourceNode.y + sourceNode.height + GREEN_NODE_PADDING;
 	const width = Math.max(320, sourceNode.width);
 	const height = 180;
 	const defaultX = sourceNode.x;
-	const chosenX = chooseOutputPosition(
+	const { x: chosenX, y: chosenY } = chooseOutputPositionXY(
 		data,
 		sourceNode.id,
 		outId,
 		defaultX,
-		y,
+		defaultY,
 		width,
-		height,
-		OUTPUT_COLLISION_MAX_RADIUS,
-		OUTPUT_COLLISION_STEP
+		height
 	);
 	const greenColor = settings.colorGreen;
 
@@ -371,7 +381,7 @@ function ensureOutputNodeAndEdge(
 				...(outNode as CanvasTextData),
 				text,
 				x: chosenX,
-				y,
+				y: chosenY,
 				width,
 				height,
 			};
@@ -379,7 +389,7 @@ function ensureOutputNodeAndEdge(
 			if (idx >= 0) data.nodes[idx] = updated;
 		} else if (outNode) {
 			(outNode as { x: number; y: number }).x = chosenX;
-			(outNode as { x: number; y: number }).y = y;
+			(outNode as { x: number; y: number }).y = chosenY;
 		}
 		const hasOutputEdge = data.edges.some(
 			(e) => e.fromNode === sourceNode.id && e.toNode === outId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT
@@ -401,7 +411,7 @@ function ensureOutputNodeAndEdge(
 		type: "text",
 		text,
 		x: chosenX,
-		y,
+		y: chosenY,
 		width,
 		height,
 		color: greenColor,

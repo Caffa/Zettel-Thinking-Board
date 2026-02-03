@@ -20,8 +20,8 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 /** Model roles that use an Ollama model and support an optional custom label. */
 const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red"];
 
-/** All roles that have a configurable node color (for conflict checks). */
-const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "blue", "yellow", "green"];
+/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary, then Python, Comment, Output. */
+export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "blue", "yellow", "green"];
 
 /** Human-readable names for conflict alerts (one-to-one color mapping). */
 const ROLE_DISPLAY_NAMES: Record<NodeRole, string> = {
