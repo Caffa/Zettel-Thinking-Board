@@ -207,6 +207,71 @@
 .ztb-color-swatch.ztb-color-swatch--preset-5 { background-color: var(--canvas-color-5, #a855f7); }
 .ztb-color-swatch.ztb-color-swatch--preset-6 { background-color: var(--canvas-color-6, #3b82f6); }
 
+/* Custom color dropdown */
+.ztb-custom-dropdown-container {
+	position: relative;
+	display: inline-block;
+}
+
+.ztb-custom-dropdown-button {
+	padding: 4px 12px;
+	background: var(--background-modifier-form-field);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 120px;
+}
+
+.ztb-custom-dropdown-button:hover {
+	background: var(--background-modifier-form-field-highlighted);
+}
+
+.ztb-color-dot {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	border: 1px solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.ztb-custom-dropdown-menu {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin-top: 4px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	box-shadow: var(--shadow-s);
+	z-index: 1000;
+	min-width: 180px;
+	max-height: 300px;
+	overflow-y: auto;
+}
+
+.ztb-custom-dropdown-option {
+	padding: 8px 12px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--text-normal);
+}
+
+.ztb-custom-dropdown-option:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ztb-custom-dropdown-option.ztb-selected {
+	background: var(--background-modifier-active-hover);
+	font-weight: 600;
+}
+
 /* Role label on canvas nodes: uses Obsidian's .canvas-node-label (same as file nodes) */
 .ztb-node-role-label.canvas-node-label {
 	pointer-events: none;

@@ -127,6 +127,7 @@ function createLabelEl(text: string): HTMLElement {
 	const el = document.createElement("div");
 	el.setAttribute("class", `${LABEL_CLASS} canvas-node-label`);
 	el.setAttribute(LABEL_DATA_ATTR, "1");
+	el.style.pointerEvents = "none"; // ensure label never blocks node drag even if CSS is overridden
 	el.textContent = text;
 	return el;
 }

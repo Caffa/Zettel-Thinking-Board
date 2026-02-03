@@ -1,0 +1,9 @@
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-800,"chosenY":-80},"timestamp":1770124811386,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-100,"chosenY":-80},"timestamp":1770124828972,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:runNode(after load)","message":"Output node positions as loaded from file","data":{"outputNodesFromFile":[]},"timestamp":1770124925892,"sessionId":"debug-session","hypothesisId":"H2"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(existing)","message":"Output node exists; position before overwrite","data":{"outId":"fabfa26a-a82f-4704-ac3c-fd597438229b","existingX":-287,"existingY":540,"chosenX":-287,"chosenY":450,"willOverwrite":true},"timestamp":1770124970774,"sessionId":"debug-session","hypothesisId":"H1"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-860,"chosenY":0},"timestamp":1770124987998,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-60,"chosenY":0},"timestamp":1770125000888,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-860,"chosenY":20},"timestamp":1770125234311,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-820,"chosenY":-60},"timestamp":1770125331435,"sessionId":"debug-session","hypothesisId":"H3"}
+{"location":"runner.ts:ensureOutputNodeAndEdge(new)","message":"Creating new output node","data":{"chosenX":-820,"chosenY":-60},"timestamp":1770125342255,"sessionId":"debug-session","hypothesisId":"H3"}

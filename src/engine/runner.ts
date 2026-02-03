@@ -247,6 +247,7 @@ async function updateEdgeLabelsAndSave(
 	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
+	if (liveCanvas?.requestSave) liveCanvas.requestSave(); // so Obsidian marks canvas dirty and won't overwrite on tab switch
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
 	if (!saved) new Notice("Failed to save canvas.");
 }
@@ -279,6 +280,7 @@ async function runSingleNode(
 		if (!isPythonCodeFenced(raw)) {
 			(node as CanvasTextData).text = ensurePythonCodeFence(raw);
 			liveCanvas?.setData?.(data);
+			if (liveCanvas?.requestSave) liveCanvas.requestSave();
 			await saveCanvasData(app.vault, canvasFilePath, data);
 		}
 	}
@@ -448,20 +450,41 @@ function ensureOutputNodeAndEdge(
 
 	if (outId) {
 		const outNode = getNodeById(data, outId);
+		if (outNode) {
+			// #region agent log
+			const existingX = (outNode as { x?: number }).x;
+			const existingY = (outNode as { y?: number }).y;
+			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					location: "runner.ts:ensureOutputNodeAndEdge(existing)",
+					message: "Output node exists; position before overwrite",
+					data: { outId, existingX, existingY, chosenX, chosenY, willOverwrite: true },
+					timestamp: Date.now(),
+					sessionId: "debug-session",
+					hypothesisId: "H1",
+				}),
+			}).catch(() => {});
+			// #endregion
+		}
 		if (outNode && isTextNode(outNode)) {
+			// Keep existing position so user-moved output nodes are not snapped back on re-run
+			const existingX = (outNode as CanvasTextData).x;
+			const existingY = (outNode as CanvasTextData).y;
 			const updated = {
 				...(outNode as CanvasTextData),
 				text,
-				x: chosenX,
-				y: chosenY,
+				x: existingX,
+				y: existingY,
 				width,
 				height,
 			};
 			const idx = data.nodes.findIndex((n) => n.id === outId);
 			if (idx >= 0) data.nodes[idx] = updated;
 		} else if (outNode) {
-			(outNode as { x: number; y: number }).x = chosenX;
-			(outNode as { x: number; y: number }).y = chosenY;
+			// Non-text output node: still preserve position
+			// (outNode.x, outNode.y already set; no overwrite)
 		}
 		const hasOutputEdge = data.edges.some(
 			(e) => e.fromNode === sourceNode.id && e.toNode === outId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT
@@ -477,6 +500,20 @@ function ensureOutputNodeAndEdge(
 		return;
 	}
 
+	// #region agent log
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "runner.ts:ensureOutputNodeAndEdge(new)",
+			message: "Creating new output node",
+			data: { chosenX, chosenY },
+			timestamp: Date.now(),
+			sessionId: "debug-session",
+			hypothesisId: "H3",
+		}),
+	}).catch(() => {});
+	// #endregion
 	const newNodeId = randomId();
 	const newTextNode: CanvasTextData = {
 		id: newNodeId,
@@ -507,6 +544,23 @@ export async function runNode(
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
+	// #region agent log
+	const outputNodesFromFile = data.nodes
+		.filter((n) => data.edges.some((e) => e.toNode === n.id && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT))
+		.map((n) => ({ id: n.id, x: (n as { x?: number }).x, y: (n as { y?: number }).y }));
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "runner.ts:runNode(after load)",
+			message: "Output node positions as loaded from file",
+			data: { outputNodesFromFile },
+			timestamp: Date.now(),
+			sessionId: "debug-session",
+			hypothesisId: "H2",
+		}),
+	}).catch(() => {});
+	// #endregion
 	const node = getNodeById(data, nodeId);
 	if (!node) return { ok: false, message: "Node not found." };
 	const role = getNodeRole(node, settings);

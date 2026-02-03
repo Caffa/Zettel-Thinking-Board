@@ -12,6 +12,7 @@ import {
 	RECOMMENDED_MODELS,
 	type RecommendedModel,
 } from "./engine/installer";
+import ntc from "ntcjs";
 
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
@@ -163,18 +164,6 @@ export function getPresetColor(presetNumber: 1 | 2 | 3 | 4 | 5 | 6): string {
 	return PRESET_HEX[String(n)] ?? "#888";
 }
 
-/** Known color names with their RGB values for color matching. */
-const COLOR_NAMES: Record<string, {r: number, g: number, b: number}> = {
-	"Red": {r: 239, g: 68, b: 68},      // #ef4444
-	"Orange": {r: 230, g: 134, b: 25},   // #e68619
-	"Yellow": {r: 234, g: 179, b: 8},    // #eab308
-	"Green": {r: 34, g: 197, b: 94},     // #22c55e
-	"Purple": {r: 168, g: 85, b: 247},   // #a855f7
-	"Blue": {r: 59, g: 130, b: 246},     // #3b82f6
-};
-
-/** Threshold for color distance matching (in RGB space, 0-441 range). */
-const COLOR_MATCH_THRESHOLD = 50;
 
 /**
  * Parse a color string (hex, rgb, rgba) and return RGB components.
@@ -182,12 +171,12 @@ const COLOR_MATCH_THRESHOLD = 50;
  */
 function parseColorToRGB(color: string): {r: number, g: number, b: number} | null {
 	const trimmed = color.trim();
-	
+
 	// Handle hex colors (#RGB or #RRGGBB or #RRGGBBAA)
 	if (trimmed.startsWith("#")) {
 		const hex = trimmed.slice(1);
 		let r = 0, g = 0, b = 0;
-		
+
 		if (hex.length === 3 && hex[0] && hex[1] && hex[2]) {
 			// #RGB -> #RRGGBB
 			r = parseInt(hex[0] + hex[0], 16);
@@ -201,12 +190,12 @@ function parseColorToRGB(color: string): {r: number, g: number, b: number} | nul
 		} else {
 			return null;
 		}
-		
+
 		if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
 			return {r, g, b};
 		}
 	}
-	
+
 	// Handle rgb(r, g, b) or rgba(r, g, b, a)
 	const rgbMatch = trimmed.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
 	if (rgbMatch && rgbMatch[1] && rgbMatch[2] && rgbMatch[3]) {
@@ -216,51 +205,30 @@ function parseColorToRGB(color: string): {r: number, g: number, b: number} | nul
 			b: parseInt(rgbMatch[3], 10)
 		};
 	}
-	
+
 	return null;
 }
 
 /**
- * Calculate Euclidean distance between two RGB colors.
- */
-function colorDistance(c1: {r: number, g: number, b: number}, c2: {r: number, g: number, b: number}): number {
-	const dr = c1.r - c2.r;
-	const dg = c1.g - c2.g;
-	const db = c1.b - c2.b;
-	return Math.sqrt(dr * dr + dg * dg + db * db);
-}
-
-/**
- * Analyze a color and return a descriptive label.
- * Returns a color name if it matches a known color, otherwise returns the hex code.
+ * Analyze a color and return a descriptive label using Name That Color (ntc.js).
+ * Returns the human-readable color name from the extensive ntc color database.
  */
 function analyzeColor(colorValue: string): string {
 	const rgb = parseColorToRGB(colorValue);
 	if (!rgb) {
-		// If we can't parse it, return the original value
-		return colorValue;
+		// If we can't parse it, return a default
+		return "Red";
 	}
-	
-	// Find the closest matching color name
-	let closestName = "";
-	let closestDistance = Infinity;
-	
-	for (const [name, namedRgb] of Object.entries(COLOR_NAMES)) {
-		const distance = colorDistance(rgb, namedRgb);
-		if (distance < closestDistance) {
-			closestDistance = distance;
-			closestName = name;
-		}
-	}
-	
-	// If the closest color is within threshold, return its name
-	if (closestDistance <= COLOR_MATCH_THRESHOLD) {
-		return closestName;
-	}
-	
-	// Otherwise, return the hex code
+
+	// Convert RGB to hex for ntc.js
 	const hex = `#${rgb.r.toString(16).padStart(2, '0')}${rgb.g.toString(16).padStart(2, '0')}${rgb.b.toString(16).padStart(2, '0')}`;
-	return hex.toUpperCase();
+
+	// Use Name That Color library to get the color name
+	// ntc.name() returns: [hex, name, exactMatch]
+	const result = ntc.name(hex);
+
+	// Return the color name (result[1])
+	return result[1] || "Unknown";
 }
 
 /** Obsidian canvas preset 1–6: color label for settings dropdown (matches PRESET_HEX order). */
@@ -409,13 +377,13 @@ function addColorSetting(
 
 	const swatchWrap = control.createSpan({ cls: "ztb-color-swatch-wrap" });
 	const swatch = swatchWrap.createSpan({ cls: "ztb-color-swatch" });
-	
+
 	// Generate dynamic label for current preset based on actual color
 	const getPresetLabel = (presetNum: string): string => {
 		const actualColor = getPresetColor(Number(presetNum) as 1 | 2 | 3 | 4 | 5 | 6);
 		return analyzeColor(actualColor);
 	};
-	
+
 	if (isPreset) {
 		setSwatchToPreset(swatch, presetValue);
 		swatch.setAttr("title", getPresetLabel(presetValue));
@@ -424,27 +392,94 @@ function addColorSetting(
 		swatch.setAttr("title", customValue || "Custom");
 	}
 
-	const dropdown = control.createEl("select", { cls: "dropdown" });
-	// Generate dropdown options with dynamic labels based on actual colors
-	PRESET_COLORS.forEach((p) => {
-		const dynamicLabel = getPresetLabel(p.value);
-		const opt = dropdown.createEl("option", { text: dynamicLabel });
-		opt.value = p.value;
-		if (p.value === presetValue) opt.selected = true;
+	// Custom dropdown container
+	const dropdownContainer = control.createDiv({ cls: "ztb-custom-dropdown-container" });
+	const dropdownButton = dropdownContainer.createEl("button", {
+		cls: "ztb-custom-dropdown-button",
+		type: "button"
 	});
-	const customOpt = dropdown.createEl("option", { text: "Custom (hex)" });
-	customOpt.value = "custom";
-	if (!isPreset) customOpt.selected = true;
-	const updateSwatch = () => {
-		const v = dropdown.value;
-		if (v === "custom") {
-			setSwatchToCustom(swatch, customHex.value.trim() || "#888");
-			swatch.setAttr("title", customHex.value.trim() || "Custom");
+
+	let currentValue = isPreset ? presetValue : "custom";
+
+	const updateDropdownButton = () => {
+		dropdownButton.empty();
+		if (currentValue === "custom") {
+			dropdownButton.setText("Custom (hex)");
 		} else {
-			setSwatchToPreset(swatch, v);
-			swatch.setAttr("title", getPresetLabel(v));
+			const actualColor = getPresetColor(Number(currentValue) as 1 | 2 | 3 | 4 | 5 | 6);
+			const colorLabel = getPresetLabel(currentValue);
+			const colorDot = dropdownButton.createSpan({ cls: "ztb-color-dot" });
+			colorDot.style.backgroundColor = actualColor;
+			dropdownButton.createSpan({ text: ` ${colorLabel}` });
 		}
 	};
+
+	const dropdownMenu = dropdownContainer.createDiv({ cls: "ztb-custom-dropdown-menu" });
+	dropdownMenu.style.display = "none";
+
+	// Add preset color options
+	PRESET_COLORS.forEach((p) => {
+		const dynamicLabel = getPresetLabel(p.value);
+		const actualColor = getPresetColor(Number(p.value) as 1 | 2 | 3 | 4 | 5 | 6);
+		const option = dropdownMenu.createDiv({ cls: "ztb-custom-dropdown-option" });
+		if (p.value === currentValue) option.addClass("ztb-selected");
+
+		const colorDot = option.createSpan({ cls: "ztb-color-dot" });
+		colorDot.style.backgroundColor = actualColor;
+		option.createSpan({ text: ` ${dynamicLabel}` });
+
+		option.addEventListener("click", () => {
+			currentValue = p.value;
+			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = p.value;
+			customHex.style.display = "none";
+			dropdownMenu.querySelectorAll(".ztb-custom-dropdown-option").forEach(el => el.removeClass("ztb-selected"));
+			option.addClass("ztb-selected");
+			updateDropdownButton();
+			setSwatchToPreset(swatch, p.value);
+			swatch.setAttr("title", getPresetLabel(p.value));
+			checkColorConflict(p.value);
+			dropdownMenu.style.display = "none";
+			plugin.saveSettings();
+		});
+	});
+
+	// Add custom option
+	const customOption = dropdownMenu.createDiv({ cls: "ztb-custom-dropdown-option" });
+	if (currentValue === "custom") customOption.addClass("ztb-selected");
+	customOption.setText("Custom (hex)");
+	customOption.addEventListener("click", () => {
+		currentValue = "custom";
+		customHex.style.display = "inline-block";
+		const hex = customHex.value.trim() || "#000000";
+		(plugin.settings as unknown as Record<string, CanvasColor>)[key] = hex;
+		dropdownMenu.querySelectorAll(".ztb-custom-dropdown-option").forEach(el => el.removeClass("ztb-selected"));
+		customOption.addClass("ztb-selected");
+		updateDropdownButton();
+		setSwatchToCustom(swatch, hex);
+		swatch.setAttr("title", hex);
+		checkColorConflict(hex);
+		dropdownMenu.style.display = "none";
+		plugin.saveSettings();
+	});
+
+	// Toggle dropdown on button click
+	dropdownButton.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const isVisible = dropdownMenu.style.display !== "none";
+		dropdownMenu.style.display = isVisible ? "none" : "block";
+	});
+
+	// Close dropdown when clicking outside
+	document.addEventListener("click", () => {
+		dropdownMenu.style.display = "none";
+	});
+
+	dropdownMenu.addEventListener("click", (e) => {
+		e.stopPropagation();
+	});
+
+	updateDropdownButton();
+
 	function checkColorConflict(newColorValue: string): void {
 		const other = getOtherRoleWithColor(plugin.settings, newColorValue, role);
 		if (other && warningCallback) {
@@ -454,20 +489,6 @@ function addColorSetting(
 			warningCallback(null);
 		}
 	}
-
-	dropdown.addEventListener("change", () => {
-		const v = dropdown.value;
-		customHex.style.display = v === "custom" ? "inline-block" : "none";
-		if (v === "custom") {
-			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = customHex.value.trim() || "#000000";
-			checkColorConflict(customHex.value.trim() || "#000000");
-		} else {
-			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = v;
-			checkColorConflict(v);
-		}
-		updateSwatch();
-		plugin.saveSettings();
-	});
 
 	const customHex = control.createEl("input", {
 		type: "text",
