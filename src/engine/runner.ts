@@ -2,6 +2,9 @@ import type {App} from "obsidian";
 import {Notice} from "obsidian";
 import {
 	EDGE_LABEL_OUTPUT,
+	EDGE_LABEL_PROMPT,
+	EDGE_LABEL_THINKING,
+	findAuxiliaryNodeForSource,
 	findOutputNodeForSource,
 	getNodeById,
 	getNodeContent,
@@ -9,7 +12,7 @@ import {
 	getIncomingEdgesWithLabels,
 	getParentIdsSortedByY,
 	GREEN_NODE_PADDING,
-	isOutputEdge,
+	isAuxiliaryEdge,
 	loadCanvasData,
 	saveCanvasData,
 } from "../canvas/nodes";
@@ -26,7 +29,7 @@ import {
 	setEdgeModes,
 	setRunningNodeId,
 } from "./state";
-import {DEFAULT_SETTINGS, type NodeRole, type ZettelPluginSettings} from "../settings";
+import {DEFAULT_SETTINGS, shadeColor, type NodeRole, type ZettelPluginSettings} from "../settings";
 
 type EdgeInputMode = "inject" | "concatenate";
 
@@ -35,15 +38,15 @@ function isNonAIRole(role: NodeRole | null): boolean {
 	return role === "blue" || role === "yellow";
 }
 
-/** Get all root node ids (no incoming non-output edges). */
+/** Get all root node ids (no incoming non-auxiliary edges). */
 function getRootIds(data: CanvasData): string[] {
 	const hasIncoming = new Set(
-		data.edges.filter((e) => !isOutputEdge(e)).map((e) => e.toNode)
+		data.edges.filter((e) => !isAuxiliaryEdge(e)).map((e) => e.toNode)
 	);
 	return data.nodes.filter((n) => !hasIncoming.has(n.id)).map((n) => n.id);
 }
 
-/** Check if there is a path from fromId to toId (ignoring output edges). */
+/** Check if there is a path from fromId to toId (ignoring auxiliary edges). */
 function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 	const visited = new Set<string>();
 	const stack = [fromId];
@@ -53,7 +56,7 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 		if (visited.has(id)) continue;
 		visited.add(id);
 		for (const e of data.edges) {
-			if (!isOutputEdge(e) && e.fromNode === id) stack.push(e.toNode);
+			if (!isAuxiliaryEdge(e) && e.fromNode === id) stack.push(e.toNode);
 		}
 	}
 	return false;
@@ -62,13 +65,13 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 /** Result of topological sort: either a valid order or cycle detected. */
 type TopoResult = { order: string[] } | { cycle: true };
 
-/** Topological order of node ids (only nodes that are ancestors of target; ignores output edges). */
+/** Topological order of node ids (only nodes that are ancestors of target; ignores auxiliary edges). */
 function topologicalOrderToTarget(
 	data: CanvasData,
 	targetId: string,
 	settings: ZettelPluginSettings
 ): TopoResult {
-	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
+	const execEdges = data.edges.filter((e) => !isAuxiliaryEdge(e));
 	const nodeIds = new Set<string>();
 	const stack = [targetId];
 	while (stack.length > 0) {
@@ -82,10 +85,10 @@ function topologicalOrderToTarget(
 	return topologicalSort(data, execEdges, nodeIds, settings);
 }
 
-/** Topological order of all nodes reachable from any root (ignores output edges). */
+/** Topological order of all nodes reachable from any root (ignores auxiliary edges). */
 function topologicalOrderFull(data: CanvasData, settings: ZettelPluginSettings): TopoResult {
 	const roots = getRootIds(data);
-	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
+	const execEdges = data.edges.filter((e) => !isAuxiliaryEdge(e));
 	const nodeIds = new Set<string>();
 	for (const rootId of roots) {
 		const stack = [rootId];
@@ -133,6 +136,15 @@ function topologicalSort(
 		return { cycle: true };
 	}
 	return { order };
+}
+
+/** Return topological execution order (1st run = index 0), or null if graph has a cycle. Used for UI order badges. */
+export function getTopologicalOrder(
+	data: CanvasData,
+	settings: ZettelPluginSettings
+): string[] | null {
+	const result = topologicalOrderFull(data, settings);
+	return "cycle" in result ? null : result.order;
 }
 
 /** Sort ready queue: non-AI (Python, text) first for early output, then by y. */
@@ -234,7 +246,7 @@ async function updateEdgeLabelsAndSave(
 	let changed = false;
 	for (const edge of data.edges) {
 		if (edge.toNode !== nodeId) continue;
-		if (isOutputEdge(edge)) continue;
+		if (isAuxiliaryEdge(edge)) continue;
 		const mode = edgeModes.get(edge.id);
 		if (mode == null) continue;
 		const baseName = parseEdgeVariableName(edge.label);
@@ -303,10 +315,13 @@ async function runSingleNode(
 			stream: false,
 			options: { temperature },
 		});
-		setNodeResult(canvasKey, nodeId, result);
-		ensureOutputNodeAndEdge(data, node, result, settings);
+		setNodeResult(canvasKey, nodeId, result.response);
+		ensureOutputNodeAndEdge(data, node, result.response, settings, {
+			fullPrompt,
+			thinking: result.thinking,
+		});
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
-		return result;
+		return result.response;
 	}
 	if (role === "purple") {
 		const model = settings.ollamaPurpleModel || "llama2";
@@ -317,10 +332,13 @@ async function runSingleNode(
 			stream: false,
 			options: { temperature },
 		});
-		setNodeResult(canvasKey, nodeId, result);
-		ensureOutputNodeAndEdge(data, node, result, settings);
+		setNodeResult(canvasKey, nodeId, result.response);
+		ensureOutputNodeAndEdge(data, node, result.response, settings, {
+			fullPrompt,
+			thinking: result.thinking,
+		});
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
-		return result;
+		return result.response;
 	}
 	if (role === "red") {
 		const model = settings.ollamaRedModel || "llama2";
@@ -331,10 +349,13 @@ async function runSingleNode(
 			stream: false,
 			options: { temperature },
 		});
-		setNodeResult(canvasKey, nodeId, result);
-		ensureOutputNodeAndEdge(data, node, result, settings);
+		setNodeResult(canvasKey, nodeId, result.response);
+		ensureOutputNodeAndEdge(data, node, result.response, settings, {
+			fullPrompt,
+			thinking: result.thinking,
+		});
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
-		return result;
+		return result.response;
 	}
 	if (role === "blue") {
 		const kernel = getKernelForCanvas(canvasKey, settings.pythonPath);
@@ -379,10 +400,12 @@ function chooseOutputPositionXY(
 	defaultX: number,
 	defaultY: number,
 	width: number,
-	height: number
+	height: number,
+	extraExcludeIds: string[] = []
 ): { x: number; y: number } {
 	const excludeIds = new Set<string>([sourceNodeId]);
 	if (outNodeId) excludeIds.add(outNodeId);
+	for (const id of extraExcludeIds) excludeIds.add(id);
 	const box = { x: 0, y: 0, width, height };
 	function tryPosition(x: number, y: number): boolean {
 		box.x = x;
@@ -425,18 +448,31 @@ function randomId(): string {
 	return "output-" + Date.now() + "-" + Math.random().toString(36).slice(2, 11);
 }
 
-/** Create or replace the Green output node and ensure an edge labeled "output" from source. Mutates data only. */
+/** Options for ensureOutputNodeAndEdge: optional prompt and thinking to show in separate nodes. */
+interface EnsureOutputOptions {
+	fullPrompt?: string;
+	thinking?: string;
+}
+
+/** Create or replace the Green output node (and optional prompt/thinking nodes) and ensure edges from source. Mutates data only. */
 function ensureOutputNodeAndEdge(
 	data: CanvasData,
 	sourceNode: AllCanvasNodeData,
 	text: string,
-	settings: ZettelPluginSettings
+	settings: ZettelPluginSettings,
+	options: EnsureOutputOptions = {}
 ): void {
+	const { fullPrompt, thinking } = options;
+	const promptId = findAuxiliaryNodeForSource(data, sourceNode.id, EDGE_LABEL_PROMPT);
+	const thinkingId = findAuxiliaryNodeForSource(data, sourceNode.id, EDGE_LABEL_THINKING);
 	const outId = findOutputNodeForSource(data, sourceNode.id, settings);
+
 	const defaultY = sourceNode.y + sourceNode.height + GREEN_NODE_PADDING;
 	const width = Math.max(320, sourceNode.width);
 	const height = 180;
 	const defaultX = sourceNode.x;
+	const extraExclude = [promptId, thinkingId].filter((id): id is string => id != null);
+
 	const { x: chosenX, y: chosenY } = chooseOutputPositionXY(
 		data,
 		sourceNode.id,
@@ -444,32 +480,17 @@ function ensureOutputNodeAndEdge(
 		defaultX,
 		defaultY,
 		width,
-		height
+		height,
+		extraExclude
 	);
 	const greenColor = settings.colorGreen;
 
+	// 1. Ensure output node
+	let resolvedOutputId: string;
 	if (outId) {
+		resolvedOutputId = outId;
 		const outNode = getNodeById(data, outId);
-		if (outNode) {
-			// #region agent log
-			const existingX = (outNode as { x?: number }).x;
-			const existingY = (outNode as { y?: number }).y;
-			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					location: "runner.ts:ensureOutputNodeAndEdge(existing)",
-					message: "Output node exists; position before overwrite",
-					data: { outId, existingX, existingY, chosenX, chosenY, willOverwrite: true },
-					timestamp: Date.now(),
-					sessionId: "debug-session",
-					hypothesisId: "H1",
-				}),
-			}).catch(() => {});
-			// #endregion
-		}
 		if (outNode && isTextNode(outNode)) {
-			// Keep existing position so user-moved output nodes are not snapped back on re-run
 			const existingX = (outNode as CanvasTextData).x;
 			const existingY = (outNode as CanvasTextData).y;
 			const updated = {
@@ -482,9 +503,6 @@ function ensureOutputNodeAndEdge(
 			};
 			const idx = data.nodes.findIndex((n) => n.id === outId);
 			if (idx >= 0) data.nodes[idx] = updated;
-		} else if (outNode) {
-			// Non-text output node: still preserve position
-			// (outNode.x, outNode.y already set; no overwrite)
 		}
 		const hasOutputEdge = data.edges.some(
 			(e) => e.fromNode === sourceNode.id && e.toNode === outId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT
@@ -497,41 +515,155 @@ function ensureOutputNodeAndEdge(
 				label: EDGE_LABEL_OUTPUT,
 			});
 		}
-		return;
+	} else {
+		const newNodeId = randomId();
+		resolvedOutputId = newNodeId;
+		const newTextNode: CanvasTextData = {
+			id: newNodeId,
+			type: "text",
+			text,
+			x: chosenX,
+			y: chosenY,
+			width,
+			height,
+			color: greenColor,
+		};
+		data.nodes.push(newTextNode);
+		data.edges.push({
+			id: randomId(),
+			fromNode: sourceNode.id,
+			toNode: newNodeId,
+			label: EDGE_LABEL_OUTPUT,
+		});
 	}
 
-	// #region agent log
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "runner.ts:ensureOutputNodeAndEdge(new)",
-			message: "Creating new output node",
-			data: { chosenX, chosenY },
-			timestamp: Date.now(),
-			sessionId: "debug-session",
-			hypothesisId: "H3",
-		}),
-	}).catch(() => {});
-	// #endregion
-	const newNodeId = randomId();
-	const newTextNode: CanvasTextData = {
-		id: newNodeId,
-		type: "text",
-		text,
-		x: chosenX,
-		y: chosenY,
-		width,
-		height,
-		color: greenColor,
-	};
-	data.nodes.push(newTextNode);
-	data.edges.push({
-		id: randomId(),
-		fromNode: sourceNode.id,
-		toNode: newNodeId,
-		label: EDGE_LABEL_OUTPUT,
-	});
+	const outputNode = getNodeById(data, resolvedOutputId);
+	const outputY = outputNode && "y" in outputNode ? (outputNode as { y: number }).y : chosenY;
+
+	// 2. Ensure thinking node (above output) when setting on and thinking present
+	if (settings.showThinkingNode && thinking != null && thinking.length > 0) {
+		const thinkingDefaultY = outputY - height - GREEN_NODE_PADDING;
+		const thinkingExclude = [sourceNode.id, resolvedOutputId, promptId].filter((id): id is string => id != null);
+		const { x: tx, y: ty } = chooseOutputPositionXY(
+			data,
+			sourceNode.id,
+			thinkingId,
+			defaultX,
+			thinkingDefaultY,
+			width,
+			height,
+			thinkingExclude
+		);
+		const thinkingColor = shadeColor(settings.colorGreen, 0.15);
+
+		if (thinkingId) {
+			const tn = getNodeById(data, thinkingId);
+			if (tn && isTextNode(tn)) {
+				const updated = {
+					...(tn as CanvasTextData),
+					text: thinking,
+					width,
+					height,
+					color: thinkingColor,
+				};
+				const idx = data.nodes.findIndex((n) => n.id === thinkingId);
+				if (idx >= 0) data.nodes[idx] = updated;
+			}
+			const hasEdge = data.edges.some(
+				(e) => e.fromNode === sourceNode.id && e.toNode === thinkingId && parseEdgeVariableName(e.label) === EDGE_LABEL_THINKING
+			);
+			if (!hasEdge) {
+				data.edges.push({
+					id: randomId(),
+					fromNode: sourceNode.id,
+					toNode: thinkingId,
+					label: EDGE_LABEL_THINKING,
+				});
+			}
+		} else {
+			const newId = randomId();
+			data.nodes.push({
+				id: newId,
+				type: "text",
+				text: thinking,
+				x: tx,
+				y: ty,
+				width,
+				height,
+				color: thinkingColor,
+			} as CanvasTextData);
+			data.edges.push({
+				id: randomId(),
+				fromNode: sourceNode.id,
+				toNode: newId,
+				label: EDGE_LABEL_THINKING,
+			});
+		}
+	}
+
+	// 3. Ensure prompt node (above thinking or output) when setting on and fullPrompt present
+	if (settings.showPromptInOutput && fullPrompt != null && fullPrompt.length > 0) {
+		const thinkingNodeId = settings.showThinkingNode && thinking ? findAuxiliaryNodeForSource(data, sourceNode.id, EDGE_LABEL_THINKING) : null;
+		const anchorNode = thinkingNodeId ? getNodeById(data, thinkingNodeId) : outputNode;
+		const anchorY = anchorNode && "y" in anchorNode ? (anchorNode as { y: number }).y : outputY;
+		const promptDefaultY = anchorY - height - GREEN_NODE_PADDING;
+		const promptExclude = [sourceNode.id, resolvedOutputId, thinkingId, promptId].filter((id): id is string => id != null);
+		const { x: px, y: py } = chooseOutputPositionXY(
+			data,
+			sourceNode.id,
+			promptId,
+			defaultX,
+			promptDefaultY,
+			width,
+			height,
+			promptExclude
+		);
+		const promptColor = shadeColor(settings.colorGreen, 0.25);
+
+		if (promptId) {
+			const pn = getNodeById(data, promptId);
+			if (pn && isTextNode(pn)) {
+				const updated = {
+					...(pn as CanvasTextData),
+					text: fullPrompt,
+					width,
+					height,
+					color: promptColor,
+				};
+				const idx = data.nodes.findIndex((n) => n.id === promptId);
+				if (idx >= 0) data.nodes[idx] = updated;
+			}
+			const hasEdge = data.edges.some(
+				(e) => e.fromNode === sourceNode.id && e.toNode === promptId && parseEdgeVariableName(e.label) === EDGE_LABEL_PROMPT
+			);
+			if (!hasEdge) {
+				data.edges.push({
+					id: randomId(),
+					fromNode: sourceNode.id,
+					toNode: promptId,
+					label: EDGE_LABEL_PROMPT,
+				});
+			}
+		} else {
+			const newId = randomId();
+			data.nodes.push({
+				id: newId,
+				type: "text",
+				text: fullPrompt,
+				x: px,
+				y: py,
+				width,
+				height,
+				color: promptColor,
+			} as CanvasTextData);
+			data.edges.push({
+				id: randomId(),
+				fromNode: sourceNode.id,
+				toNode: newId,
+				label: EDGE_LABEL_PROMPT,
+			});
+		}
+	}
 }
 
 /** Run a single node (for "Run Node" command). If parents are not run, runs chain to this node instead. */
@@ -544,23 +676,6 @@ export async function runNode(
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
-	// #region agent log
-	const outputNodesFromFile = data.nodes
-		.filter((n) => data.edges.some((e) => e.toNode === n.id && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT))
-		.map((n) => ({ id: n.id, x: (n as { x?: number }).x, y: (n as { y?: number }).y }));
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "runner.ts:runNode(after load)",
-			message: "Output node positions as loaded from file",
-			data: { outputNodesFromFile },
-			timestamp: Date.now(),
-			sessionId: "debug-session",
-			hypothesisId: "H2",
-		}),
-	}).catch(() => {});
-	// #endregion
 	const node = getNodeById(data, nodeId);
 	if (!node) return { ok: false, message: "Node not found." };
 	const role = getNodeRole(node, settings);
@@ -646,7 +761,7 @@ export async function runChain(
 	}
 }
 
-/** Remove the Green output node and its output edge for a given source node; mutates data and saves. */
+/** Remove the Green output node and any prompt/thinking nodes (and their edges) for a given source node; mutates data and saves. */
 export async function dismissOutput(
 	vault: App["vault"],
 	canvasFilePath: string,
@@ -657,10 +772,14 @@ export async function dismissOutput(
 	const data = await loadCanvasData(vault, canvasFilePath);
 	if (!data) return;
 	const outId = findOutputNodeForSource(data, sourceNodeId, settings);
-	if (!outId) return;
-	data.nodes = data.nodes.filter((n) => n.id !== outId);
+	const promptId = findAuxiliaryNodeForSource(data, sourceNodeId, EDGE_LABEL_PROMPT);
+	const thinkingId = findAuxiliaryNodeForSource(data, sourceNodeId, EDGE_LABEL_THINKING);
+	const toRemove = new Set<string>([outId, promptId, thinkingId].filter((id): id is string => id != null));
+	if (toRemove.size === 0) return;
+	data.nodes = data.nodes.filter((n) => !toRemove.has(n.id));
 	data.edges = data.edges.filter(
-		(e) => !(e.fromNode === sourceNodeId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT)
+		(e) =>
+			!(e.fromNode === sourceNodeId && toRemove.has(e.toNode) && [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING].includes(parseEdgeVariableName(e.label)))
 	);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
@@ -668,7 +787,7 @@ export async function dismissOutput(
 	if (!saved) new Notice("Failed to save canvas.");
 }
 
-/** Remove all Green output nodes and their output edges on the canvas; mutates data and saves. */
+/** Remove all Green output, prompt, and thinking nodes and their edges on the canvas; mutates data and saves. */
 export async function dismissAllOutput(
 	vault: App["vault"],
 	canvasFilePath: string,
@@ -676,13 +795,14 @@ export async function dismissAllOutput(
 ): Promise<void> {
 	const data = await loadCanvasData(vault, canvasFilePath);
 	if (!data) return;
-	const outputNodeIds = new Set(
+	const auxiliaryLabels = [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING];
+	const auxiliaryNodeIds = new Set(
 		data.edges
-			.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT)
+			.filter((e) => auxiliaryLabels.includes(parseEdgeVariableName(e.label)))
 			.map((e) => e.toNode)
 	);
-	data.nodes = data.nodes.filter((n) => !outputNodeIds.has(n.id));
-	data.edges = data.edges.filter((e) => parseEdgeVariableName(e.label) !== EDGE_LABEL_OUTPUT);
+	data.nodes = data.nodes.filter((n) => !auxiliaryNodeIds.has(n.id));
+	data.edges = data.edges.filter((e) => !auxiliaryLabels.includes(parseEdgeVariableName(e.label)));
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	const saved = await saveCanvasData(vault, canvasFilePath, data);

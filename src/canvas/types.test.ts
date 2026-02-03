@@ -7,11 +7,14 @@ import {
 	getIncomingEdgesWithLabels,
 	findOutputNodeForSource,
 	isOutputEdge,
+	isAuxiliaryEdge,
 	parseEdgeVariableName,
 	GREEN_NODE_PADDING,
 	EDGE_LABEL_INJECTED,
 	EDGE_LABEL_CONCATENATED,
 	EDGE_LABEL_OUTPUT,
+	EDGE_LABEL_PROMPT,
+	EDGE_LABEL_THINKING,
 } from "./types";
 import type { CanvasData } from "./types";
 import { DEFAULT_SETTINGS } from "../settings";
@@ -88,6 +91,17 @@ describe("isOutputEdge", () => {
 	});
 });
 
+describe("isAuxiliaryEdge", () => {
+	it("returns true for output, prompt, and thinking labels", () => {
+		expect(isAuxiliaryEdge({ id: "e", fromNode: "a", toNode: "b", label: EDGE_LABEL_OUTPUT })).toBe(true);
+		expect(isAuxiliaryEdge({ id: "e", fromNode: "a", toNode: "b", label: EDGE_LABEL_PROMPT })).toBe(true);
+		expect(isAuxiliaryEdge({ id: "e", fromNode: "a", toNode: "b", label: EDGE_LABEL_THINKING })).toBe(true);
+	});
+	it("returns false for variable edges", () => {
+		expect(isAuxiliaryEdge({ id: "e", fromNode: "a", toNode: "b", label: "age" })).toBe(false);
+	});
+});
+
 describe("getIncomingEdgesWithLabels", () => {
 	it("returns incoming edges with variable names sorted by parent y", () => {
 		const data: CanvasData = {
@@ -135,6 +149,25 @@ describe("getIncomingEdgesWithLabels", () => {
 		expect(result).toHaveLength(1);
 		expect(result[0]?.parentId).toBe("b");
 		expect(result[0]?.variableName).toBe("age");
+	});
+	it("sorts by parent y then x (left-most first when same y)", () => {
+		const data: CanvasData = {
+			nodes: [
+				{ id: "a", x: 0, y: 100, width: 100, height: 50, type: "text", text: "" },
+				{ id: "b", x: 200, y: 50, width: 100, height: 50, type: "text", text: "" },
+				{ id: "c", x: 100, y: 50, width: 100, height: 50, type: "text", text: "" },
+			],
+			edges: [
+				{ id: "e1", fromNode: "b", toNode: "a", label: "right" },
+				{ id: "e2", fromNode: "c", toNode: "a", label: "mid" },
+			],
+		};
+		const result = getIncomingEdgesWithLabels("a", data);
+		expect(result).toHaveLength(2);
+		expect(result[0]!.parentId).toBe("c");
+		expect(result[0]!.variableName).toBe("mid");
+		expect(result[1]!.parentId).toBe("b");
+		expect(result[1]!.variableName).toBe("right");
 	});
 });
 

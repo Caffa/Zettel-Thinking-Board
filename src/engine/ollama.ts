@@ -31,8 +31,14 @@ export interface OllamaGenerateOptions {
 	options?: OllamaGenerateRequestOptions;
 }
 
-/** Call Ollama /api/generate and return the response string. */
-export async function ollamaGenerate(options: OllamaGenerateOptions): Promise<string> {
+/** Response from Ollama /api/generate (thinking is present for reasoning models). */
+export interface OllamaGenerateResult {
+	response: string;
+	thinking?: string;
+}
+
+/** Call Ollama /api/generate and return the response and optional thinking. */
+export async function ollamaGenerate(options: OllamaGenerateOptions): Promise<OllamaGenerateResult> {
 	const {model, prompt, stream = false, options: requestOptions} = options;
 	const url = `${OLLAMA_BASE}/api/generate`;
 	const payload: { model: string; prompt: string; stream: boolean; options?: OllamaGenerateRequestOptions } = {
@@ -53,6 +59,8 @@ export async function ollamaGenerate(options: OllamaGenerateOptions): Promise<st
 		const text = await res.text();
 		throw new Error(`Ollama error ${res.status}: ${text}`);
 	}
-	const data = (await res.json()) as { response?: string };
-	return data.response ?? "";
+	const data = (await res.json()) as { response?: string; thinking?: string };
+	const response = data.response ?? "";
+	const thinking = typeof data.thinking === "string" && data.thinking.length > 0 ? data.thinking : undefined;
+	return { response, thinking };
 }

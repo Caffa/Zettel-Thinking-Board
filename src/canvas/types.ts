@@ -37,6 +37,10 @@ export const EDGE_LABEL_CONCATENATED = " (concatenated)";
 
 /** Reserved edge label from run node to its green output note; not a variable name. */
 export const EDGE_LABEL_OUTPUT = "output";
+/** Reserved edge label from run node to optional prompt display node. */
+export const EDGE_LABEL_PROMPT = "prompt";
+/** Reserved edge label from run node to optional thinking display node. */
+export const EDGE_LABEL_THINKING = "thinking";
 
 /** Parse variable name from edge label; ignore anything in brackets at the end. */
 export function parseEdgeVariableName(label: string | undefined): string {
@@ -50,6 +54,12 @@ export function isOutputEdge(edge: CanvasEdgeData): boolean {
 	return parseEdgeVariableName(edge.label) === EDGE_LABEL_OUTPUT;
 }
 
+/** True if edge is a reserved auxiliary edge (output, prompt, thinking); ignored by execution. */
+export function isAuxiliaryEdge(edge: CanvasEdgeData): boolean {
+	const label = parseEdgeVariableName(edge.label);
+	return label === EDGE_LABEL_OUTPUT || label === EDGE_LABEL_PROMPT || label === EDGE_LABEL_THINKING;
+}
+
 /** Incoming edge with parent id and optional variable name (from label). */
 export interface IncomingEdgeInfo {
 	parentId: string;
@@ -57,27 +67,29 @@ export interface IncomingEdgeInfo {
 	variableName: string;
 }
 
-/** Get incoming edges for a node with parent id and variable name, sorted by parent y. Excludes output edges. */
+/** Get incoming edges for a node with parent id and variable name, sorted by parent y then x (higher, then left-most). Excludes output/prompt/thinking edges. */
 export function getIncomingEdgesWithLabels(nodeId: string, data: CanvasData): IncomingEdgeInfo[] {
-	const edges = data.edges.filter((e) => e.toNode === nodeId && !isOutputEdge(e));
+	const edges = data.edges.filter((e) => e.toNode === nodeId && !isAuxiliaryEdge(e));
 	const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
-	const withY = edges.map((e) => {
+	const withPos = edges.map((e) => {
 		const parent = nodeMap.get(e.fromNode);
 		const y = parent?.y ?? 0;
+		const x = parent?.x ?? 0;
 		return {
 			parentId: e.fromNode,
 			edge: e,
 			variableName: parseEdgeVariableName(e.label),
 			y,
+			x,
 		};
 	});
-	withY.sort((a, b) => a.y - b.y);
-	return withY.map(({ parentId, edge, variableName }) => ({ parentId, edge, variableName }));
+	withPos.sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
+	return withPos.map(({ parentId, edge, variableName }) => ({ parentId, edge, variableName }));
 }
 
-/** Get parent node IDs for a node, sorted by y (top to bottom). Excludes output edges. */
+/** Get parent node IDs for a node, sorted by y (top to bottom). Excludes output/prompt/thinking edges. */
 export function getParentIdsSortedByY(nodeId: string, data: CanvasData): string[] {
-	const edges = data.edges.filter((e) => e.toNode === nodeId && !isOutputEdge(e));
+	const edges = data.edges.filter((e) => e.toNode === nodeId && !isAuxiliaryEdge(e));
 	const fromIds = [...new Set(edges.map((e) => e.fromNode))];
 	const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
 	const withY = fromIds
@@ -152,6 +164,18 @@ export function findOutputNodeForSource(
 		Math.abs(a.centerY - expectedY) <= Math.abs(b.centerY - expectedY) ? a : b
 	);
 	return best.id;
+}
+
+/** Find the node id for an auxiliary edge from source with the given label (e.g. EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING). */
+export function findAuxiliaryNodeForSource(
+	data: CanvasData,
+	sourceNodeId: string,
+	edgeLabel: string
+): string | null {
+	const edge = data.edges.find(
+		(e) => e.fromNode === sourceNodeId && parseEdgeVariableName(e.label) === edgeLabel
+	);
+	return edge ? edge.toNode : null;
 }
 
 /** Check if canvas has any output nodes (green nodes connected by output edges). */

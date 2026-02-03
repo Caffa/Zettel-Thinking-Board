@@ -59,6 +59,9 @@ export async function getNodeContent(
 // Re-export for callers
 export {
 	EDGE_LABEL_OUTPUT,
+	EDGE_LABEL_PROMPT,
+	EDGE_LABEL_THINKING,
+	findAuxiliaryNodeForSource,
 	findOutputNodeForSource,
 	getNodeById,
 	getNodeRole,
@@ -66,6 +69,7 @@ export {
 	getIncomingEdgesWithLabels,
 	GREEN_NODE_PADDING,
 	hasOutputNodes,
+	isAuxiliaryEdge,
 	isFileNode,
 	isOutputEdge,
 	isTextNode,

@@ -4,9 +4,11 @@ import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {COLOR_ROLES, getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
+import {getTopologicalOrder} from "../engine/runner";
 import {getCanvasKey, getEdgeMode, getRunningNodeId} from "../engine/state";
 
 const LABEL_CLASS = "ztb-node-role-label";
+const ORDER_BADGE_CLASS = "ztb-node-order-badge";
 const LABEL_DATA_ATTR = "data-ztb-role-label";
 const LEGEND_CLASS = "ztb-canvas-legend";
 const EDGE_MODE_LABEL_CLASS = "ztb-edge-mode-label";
@@ -51,9 +53,10 @@ function findNodeElementByDataId(containerEl: HTMLElement, nodeId: string): HTML
 	return el instanceof HTMLElement ? el : null;
 }
 
-/** Remove all role labels we added from the container. */
+/** Remove all role labels and order badges we added from the container. */
 export function clearCanvasRoleLabels(containerEl: HTMLElement): void {
 	containerEl.querySelectorAll(`.${LABEL_CLASS}`).forEach((el) => el.remove());
+	containerEl.querySelectorAll(`.${ORDER_BADGE_CLASS}`).forEach((el) => el.remove());
 }
 
 /** Remove the canvas legend from the container. */
@@ -132,6 +135,15 @@ function createLabelEl(text: string): HTMLElement {
 	return el;
 }
 
+/** Create the concatenation-order badge (top-right of node). Number is 1-based; top of order = 1. */
+function createOrderBadgeEl(orderIndex: number): HTMLElement {
+	const el = document.createElement("div");
+	el.setAttribute("class", ORDER_BADGE_CLASS);
+	el.style.pointerEvents = "none";
+	el.textContent = String(orderIndex);
+	return el;
+}
+
 /**
  * Sync floating role labels for the active canvas: for each node whose color maps to a role,
  * add a small label above the node (e.g. "Text", "Python"). Removes existing labels first.
@@ -161,17 +173,31 @@ export async function syncCanvasRoleLabels(
 	// Clear only after we have data so we never paint a frame with labels removed and nothing to show (avoids flicker).
 	clearCanvasRoleLabels(containerEl);
 	syncCanvasLegend(containerEl, settings);
+
+	const order = getTopologicalOrder(data, settings);
+	const orderByNodeId = new Map<string, number>();
+	if (order) {
+		order.forEach((nodeId, index) => orderByNodeId.set(nodeId, index + 1));
+	}
+
 	for (const node of data.nodes) {
-		const role = getNodeRole(node, settings);
-		if (!role) continue;
-		const labelText = getRoleLabel(role, settings);
 		const nodeEl =
 			(canvas && getNodeElFromCanvas(canvas, node.id)) ||
 			findNodeElementByDataId(containerEl, node.id);
 		if (!nodeEl) continue;
-		const label = createLabelEl(labelText);
-		// Append after .canvas-node-container so it matches Obsidian file node label position
-		nodeEl.append(label);
+
+		const role = getNodeRole(node, settings);
+		if (role) {
+			const labelText = getRoleLabel(role, settings);
+			const label = createLabelEl(labelText);
+			nodeEl.append(label);
+		}
+
+		const orderIndex = orderByNodeId.get(node.id);
+		if (orderIndex != null) {
+			const badge = createOrderBadgeEl(orderIndex);
+			nodeEl.append(badge);
+		}
 	}
 }
 

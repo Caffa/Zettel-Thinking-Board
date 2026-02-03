@@ -103,6 +103,8 @@ export interface ZettelPluginSettings {
 	colorBlue: CanvasColor;
 	colorYellow: CanvasColor;
 	colorGreen: CanvasColor;
+	showPromptInOutput: boolean;
+	showThinkingNode: boolean;
 	showNodeRoleLabels: boolean;
 	pythonPath: string;
 	canvasTemplateFolder: string;
@@ -125,6 +127,8 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	colorBlue: "6",
 	colorYellow: "3",
 	colorGreen: "4",
+	showPromptInOutput: false,
+	showThinkingNode: false,
 	showNodeRoleLabels: true,
 	pythonPath: "python3",
 	canvasTemplateFolder: "",
@@ -207,6 +211,25 @@ function parseColorToRGB(color: string): {r: number, g: number, b: number} | nul
 	}
 
 	return null;
+}
+
+/**
+ * Return a shade of the given color. amount in [-1, 1]: negative = darker (blend toward black), positive = lighter (blend toward white).
+ * Accepts hex, rgb(), or Obsidian preset "1"-"6". Returns hex for Obsidian canvas node color; returns original string if parsing fails.
+ */
+export function shadeColor(color: string, amount: number): string {
+	const resolved = /^[1-6]$/.test(color.trim()) ? getPresetColor(Number(color) as 1 | 2 | 3 | 4 | 5 | 6) : color;
+	const rgb = parseColorToRGB(resolved);
+	if (!rgb) return color;
+	const t = Math.max(-1, Math.min(1, amount));
+	const blend = (c: number) => {
+		if (t >= 0) return Math.round(c + (255 - c) * t);
+		return Math.round(c * (1 + t));
+	};
+	const r = blend(rgb.r);
+	const g = blend(rgb.g);
+	const b = blend(rgb.b);
+	return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
 /**
@@ -322,16 +345,22 @@ function addModelBlock(
 				await plugin.saveSettings();
 			}));
 
-	new Setting(content)
+	const initialTemp = Number(s[temperatureKey]) ?? (DEFAULT_SETTINGS[temperatureKey] as number);
+	let tempValueEl: HTMLSpanElement;
+	const tempSetting = new Setting(content)
 		.setName("Temperature")
 		.setDesc("Higher = more creative, lower = more deterministic (0–2).")
-		.addSlider((slider) => slider
-			.setLimits(0, 2, 0.1)
-			.setValue(Number(s[temperatureKey]) ?? DEFAULT_SETTINGS[temperatureKey])
-			.onChange(async (value) => {
-				(plugin.settings as unknown as Record<string, number>)[temperatureKey] = value;
-				await plugin.saveSettings();
-			}));
+		.addSlider((slider) => {
+			slider
+				.setLimits(0, 2, 0.1)
+				.setValue(initialTemp)
+				.onChange(async (value) => {
+					(plugin.settings as unknown as Record<string, number>)[temperatureKey] = value;
+					await plugin.saveSettings();
+					tempValueEl.setText(value.toFixed(1));
+				});
+		});
+	tempValueEl = tempSetting.controlEl.createSpan({ cls: "ztb-temperature-value", text: initialTemp.toFixed(1) });
 
 	addColorSetting(
 		content,
@@ -626,6 +655,26 @@ export class ZettelSettingTab extends PluginSettingTab {
 			"Color for auto-generated output nodes on the canvas",
 			warningCallback
 		);
+
+		new Setting(displaySection)
+			.setName("Show prompt in output")
+			.setDesc("When enabled, create a separate node above the output showing the full prompt sent to the model (in a lighter shade of the output color)")
+			.addToggle((toggle) => toggle
+				.setValue(s.showPromptInOutput)
+				.onChange(async (value) => {
+					this.plugin.settings.showPromptInOutput = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(displaySection)
+			.setName("Show model thinking node")
+			.setDesc("When enabled and the model returns thinking (e.g. reasoning trace), create an extra node to display it")
+			.addToggle((toggle) => toggle
+				.setValue(s.showThinkingNode)
+				.onChange(async (value) => {
+					this.plugin.settings.showThinkingNode = value;
+					await this.plugin.saveSettings();
+				}));
 
 		// Canvas Templates section
 		const templatesSection = containerEl.createDiv({ cls: "ztb-settings-section" });
