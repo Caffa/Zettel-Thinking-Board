@@ -1,6 +1,12 @@
 import type {Vault} from "obsidian";
 import {loadCanvasData} from "./nodes";
-import {getNodeRole, isOutputEdge} from "./types";
+import {
+	EDGE_LABEL_PROMPT,
+	EDGE_LABEL_THINKING,
+	getNodeRole,
+	isOutputEdge,
+	parseEdgeVariableName,
+} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {COLOR_ROLES, getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
@@ -180,23 +186,46 @@ export async function syncCanvasRoleLabels(
 		order.forEach((nodeId, index) => orderByNodeId.set(nodeId, index + 1));
 	}
 
+	const promptNodeIds = new Set(
+		data.edges
+			.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_PROMPT)
+			.map((e) => e.toNode)
+	);
+	const thinkingNodeIds = new Set(
+		data.edges
+			.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_THINKING)
+			.map((e) => e.toNode)
+	);
+
 	for (const node of data.nodes) {
 		const nodeEl =
 			(canvas && getNodeElFromCanvas(canvas, node.id)) ||
 			findNodeElementByDataId(containerEl, node.id);
 		if (!nodeEl) continue;
+		// Append to root .canvas-node so position:absolute is relative to the full card (avoids overlapping file title)
+		const rootEl =
+			nodeEl.classList.contains("canvas-node")
+				? nodeEl
+				: (nodeEl.closest(".canvas-node") as HTMLElement | null) ?? nodeEl;
 
+		let labelText: string | null = null;
 		const role = getNodeRole(node, settings);
 		if (role) {
-			const labelText = getRoleLabel(role, settings);
+			labelText = getRoleLabel(role, settings);
+		} else if (promptNodeIds.has(node.id)) {
+			labelText = "Prompt";
+		} else if (thinkingNodeIds.has(node.id)) {
+			labelText = "Thinking";
+		}
+		if (labelText) {
 			const label = createLabelEl(labelText);
-			nodeEl.append(label);
+			rootEl.prepend(label);
 		}
 
 		const orderIndex = orderByNodeId.get(node.id);
 		if (orderIndex != null) {
 			const badge = createOrderBadgeEl(orderIndex);
-			nodeEl.append(badge);
+			rootEl.prepend(badge);
 		}
 	}
 }

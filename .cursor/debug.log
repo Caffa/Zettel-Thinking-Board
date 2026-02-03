@@ -1,0 +1,5 @@
+{"location":"runner.ts:runSingleNode","message":"entry node color from loaded data","data":{"nodeId":"1f2239043e417637","nodeType":"file","nodeColor":"5"},"timestamp":1770128031750,"sessionId":"debug-session","hypothesisId":"A"}
+{"location":"runner.ts:runSingleNode","message":"entry node color from loaded data","data":{"nodeId":"02576ff30b8d087e","nodeType":"text","nodeColor":"5"},"timestamp":1770128031750,"sessionId":"debug-session","hypothesisId":"A"}
+{"location":"runner.ts:runSingleNode","message":"entry node color from loaded data","data":{"nodeId":"1c275d8334c4d2e5","nodeType":"text","nodeColor":"1"},"timestamp":1770128031750,"sessionId":"debug-session","hypothesisId":"A"}
+{"location":"runner.ts:updateEdgeLabelsAndSave","message":"before merge","data":{"nodeId":"1c275d8334c4d2e5","nodeColorBefore":"1","hasGetData":true,"liveNodeCount":5},"timestamp":1770128038531,"sessionId":"debug-session","hypothesisId":"B"}
+{"location":"runner.ts:updateEdgeLabelsAndSave","message":"after merge","data":{"nodeId":"1c275d8334c4d2e5","nodeColorAfter":"1"},"timestamp":1770128038531,"sessionId":"debug-session","hypothesisId":"C"}

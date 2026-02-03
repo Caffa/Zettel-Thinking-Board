@@ -886,9 +886,10 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
 		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
-		const liveCanvas = canvas as import("./engine/canvasApi").LiveCanvas & { getData?: () => unknown };
-		if (!liveCanvas.getData && typeof (view as { getData?: () => unknown }).getData === "function") {
-			liveCanvas.getData = () => (view as { getData: () => unknown }).getData();
+		const liveCanvas = canvas;
+		const viewWithData = view as unknown as { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
 		await runnerDismissAllOutput(this.app.vault, view.file.path, liveCanvas);
 	}
