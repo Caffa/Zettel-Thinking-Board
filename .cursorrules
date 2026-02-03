@@ -1,3 +1,8 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Cursor Rules for Obsidian Plugin Development
 
 You are an expert Obsidian Plugin Developer and TypeScript Engineer. You follow the official Obsidian Developer Docs, the "Plugin Review Guidelines," and strict Clean Code principles.
@@ -36,4 +41,3 @@ These rules are critical for passing the official plugin review.
 - When I ask for a code change, ensure it compiles with the Obsidian API definitions.
 - Before suggesting code, check if it uses deprecated Obsidian APIs (like `app.vault.read` vs `app.vault.readBinary` nuances).
 - Clarify doubts on features before implementing. You should update the `PRD.md` Product Requirement Document with the decisions too.
-

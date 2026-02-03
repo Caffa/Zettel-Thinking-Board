@@ -1,0 +1,61 @@
+/* Zettel Thinking Board - side panel and controls */
+
+.ztb-controls-container {
+	padding: var(--size-4-2);
+}
+
+.ztb-section-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	margin: var(--size-4-2) 0 var(--size-2-1);
+}
+
+.ztb-console {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	max-height: 200px;
+	overflow-y: auto;
+	padding: var(--size-2-1);
+	font-family: var(--font-monospace);
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+}
+
+.ztb-console-line {
+	margin: 0 0 var(--size-2-1);
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.ztb-env-desc {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+	margin-bottom: var(--size-2-1);
+}
+
+.ztb-env-list {
+	margin-bottom: var(--size-2-1);
+}
+
+.ztb-env-row {
+	display: flex;
+	gap: var(--size-2-1);
+	align-items: center;
+	margin-bottom: var(--size-2-1);
+}
+
+.ztb-env-key,
+.ztb-env-val {
+	flex: 1;
+	min-width: 0;
+}
+
+.ztb-env-add,
+.ztb-env-remove {
+	margin-top: var(--size-2-1);
+}
+
+.ztb-controls-title {
+	margin-bottom: var(--size-4-2);
+}

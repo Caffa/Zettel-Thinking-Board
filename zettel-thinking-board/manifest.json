@@ -1,0 +1,11 @@
+{
+	"id": "zettel-thinking-board",
+	"name": "Zettel Thinking Board",
+	"version": "1.0.0",
+	"minAppVersion": "1.7.7",
+	"description": "Turns the canvas nodes in executable cells (similar to a Jupyter Notebook) but organized spatially. Cells can be python, ollama AI or comments.",
+	"author": "Pamela Wang",
+	"authorUrl": "https://github.com/Caffa",
+	"fundingUrl": "https://ko-fi.com/pamelawang_mwahacookie",
+	"isDesktopOnly": false
+}
