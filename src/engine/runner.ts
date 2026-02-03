@@ -518,6 +518,19 @@ function ensureOutputNodeAndEdge(
 	} else {
 		const newNodeId = randomId();
 		resolvedOutputId = newNodeId;
+		// #region agent log
+		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				location: "runner.ts:ensureOutputNodeAndEdge(new output)",
+				message: "Writing new output node position",
+				data: { hypothesisId: "H5", sourceId: sourceNode.id, nodeId: newNodeId, x: chosenX, y: chosenY, width, height },
+				timestamp: Date.now(),
+				sessionId: "debug-session",
+			}),
+		}).catch(() => {});
+		// #endregion
 		const newTextNode: CanvasTextData = {
 			id: newNodeId,
 			type: "text",

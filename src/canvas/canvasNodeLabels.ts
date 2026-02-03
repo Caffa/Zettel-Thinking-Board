@@ -180,11 +180,46 @@ export async function syncCanvasRoleLabels(
 		order.forEach((nodeId, index) => orderByNodeId.set(nodeId, index + 1));
 	}
 
+	// #region agent log
+	let sampleCount = 0;
+	const maxSample = 3;
+	// #endregion
+
 	for (const node of data.nodes) {
 		const nodeEl =
 			(canvas && getNodeElFromCanvas(canvas, node.id)) ||
 			findNodeElementByDataId(containerEl, node.id);
 		if (!nodeEl) continue;
+
+		// #region agent log
+		if (sampleCount < maxSample) {
+			const rect = nodeEl.getBoundingClientRect();
+			const cs = nodeEl instanceof HTMLElement ? window.getComputedStyle(nodeEl) : null;
+			const parentCs = nodeEl.parentElement ? window.getComputedStyle(nodeEl.parentElement) : null;
+			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					location: "canvasNodeLabels.ts:syncCanvasRoleLabels",
+					message: "Node data vs DOM position",
+					data: {
+						hypothesisId: "H1_H2_H4",
+						nodeId: node.id,
+						dataXY: { x: (node as { x?: number }).x, y: (node as { y?: number }).y },
+						dataWH: { w: (node as { width?: number }).width, h: (node as { height?: number }).height },
+						domRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+						nodePosition: cs?.position ?? null,
+						nodeTransform: cs?.transform !== "none" ? cs?.transform : null,
+						parentTransform: parentCs?.transform !== "none" ? parentCs?.transform : null,
+						className: nodeEl.className?.slice(0, 80) ?? null,
+					},
+					timestamp: Date.now(),
+					sessionId: "debug-session",
+				}),
+			}).catch(() => {});
+			sampleCount++;
+		}
+		// #endregion
 
 		const role = getNodeRole(node, settings);
 		if (role) {
@@ -199,6 +234,27 @@ export async function syncCanvasRoleLabels(
 			nodeEl.append(badge);
 		}
 	}
+
+	// #region agent log
+	const canvasRect = containerEl.getBoundingClientRect();
+	const containerCs = window.getComputedStyle(containerEl);
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			location: "canvasNodeLabels.ts:syncCanvasRoleLabels",
+			message: "Canvas container transform",
+			data: {
+				hypothesisId: "H3",
+				containerTransform: containerCs.transform !== "none" ? containerCs.transform : null,
+				containerRect: { left: canvasRect.left, top: canvasRect.top },
+				nodeCount: data.nodes.length,
+			},
+			timestamp: Date.now(),
+			sessionId: "debug-session",
+		}),
+	}).catch(() => {});
+	// #endregion
 }
 
 /** Get center of an element in viewport coordinates. */

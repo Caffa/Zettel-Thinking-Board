@@ -286,6 +286,7 @@
 }
 
 /* Concatenation order badge at top-right of each node (1 = first in run order) */
+/* Badge is positioned relative to the node; Obsidian uses transform on .canvas-node, which already creates a containing block for absolute children. Do not set .canvas-node { position: relative } or edge positions desync. */
 .ztb-node-order-badge {
 	position: absolute;
 	top: 2px;
@@ -301,9 +302,6 @@
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	z-index: 1;
-}
-.canvas-node {
-	position: relative;
 }
 
 /* Canvas color legend (positioned in bottom-right of canvas view) */
