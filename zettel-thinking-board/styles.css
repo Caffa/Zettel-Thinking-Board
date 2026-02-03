@@ -346,3 +346,92 @@
 .ztb-toolbar-label {
 	white-space: nowrap;
 }
+
+/* Canvas Template Modal */
+.ztb-template-modal {
+	min-width: 500px;
+}
+
+.ztb-template-modal h2 {
+	margin-top: 0;
+	margin-bottom: 1em;
+}
+
+.ztb-template-modal-empty {
+	padding: 1em 0;
+}
+
+.ztb-template-modal-empty p {
+	margin: 0.5em 0;
+}
+
+.ztb-template-modal-list {
+	max-height: 400px;
+	overflow-y: auto;
+	margin-bottom: 1em;
+}
+
+.ztb-template-modal-item {
+	padding: 0.75em 1em;
+	margin-bottom: 0.5em;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.ztb-template-modal-item-hover,
+.ztb-template-modal-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.ztb-template-modal-item-name {
+	font-weight: 500;
+	margin-bottom: 0.25em;
+	color: var(--text-normal);
+}
+
+.ztb-template-modal-item-path {
+	font-size: 0.875em;
+	color: var(--text-muted);
+}
+
+.ztb-template-modal-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.5em;
+	margin-top: 1em;
+	padding-top: 1em;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.ztb-template-modal-buttons button {
+	padding: 0.5em 1.5em;
+}
+
+/* Template Banner */
+.ztb-template-banner {
+	position: absolute;
+	bottom: 20px;
+	left: 20px;
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0.5em 1em;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-radius: var(--radius-m);
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	z-index: 100;
+	pointer-events: none;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ztb-template-banner-icon {
+	font-size: 1.2em;
+}
+
+.ztb-template-banner-text {
+	white-space: nowrap;
+}

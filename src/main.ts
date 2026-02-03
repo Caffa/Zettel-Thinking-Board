@@ -1,6 +1,8 @@
 import {ItemView, Menu, Notice, Plugin, TFile, WorkspaceLeaf, normalizePath} from "obsidian";
 import {DEFAULT_SETTINGS, ZettelPluginSettings, ZettelSettingTab} from "./settings";
 import {ZettelControlsView, ZETTEL_CONTROLS_VIEW_TYPE} from "./views/ZettelControlsView";
+import {CanvasTemplateModal} from "./views/CanvasTemplateModal";
+import {duplicateCanvasTemplate, saveCanvasAsTemplate, isCanvasInTemplateFolder} from "./canvas/canvasTemplates";
 import {
 	dismissAllOutput as runnerDismissAllOutput,
 	dismissOutput as runnerDismissOutput,
@@ -15,7 +17,7 @@ import {
 	syncCanvasEdgeModeLabels,
 	syncCanvasRoleLabels,
 } from "./canvas/canvasNodeLabels";
-import {saveCanvasData} from "./canvas/nodes";
+import {hasOutputNodes, loadCanvasData, saveCanvasData} from "./canvas/nodes";
 import type {CanvasData} from "./canvas/types";
 import {EDGE_LABEL_OUTPUT} from "./canvas/types";
 import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
@@ -351,6 +353,30 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			});
 
 			this.addCommand({
+				id: "duplicate-canvas-template",
+				name: "Duplicate canvas template",
+				callback: () => this.duplicateCanvasTemplate(),
+			});
+
+			this.addCommand({
+				id: "save-canvas-as-template",
+				name: "Save canvas as template",
+				checkCallback: (checking: boolean) => {
+					const view = this.getActiveCanvasView();
+					if (!view) return false;
+					if (checking) return true;
+					this.saveCanvasAsTemplate();
+					return true;
+				},
+			});
+
+			this.addCommand({
+				id: "edit-canvas-template",
+				name: "Edit canvas template",
+				callback: () => this.editCanvasTemplate(),
+			});
+
+			this.addCommand({
 				id: "run-node",
 				name: "Run node",
 				checkCallback: (checking: boolean) => {
@@ -462,9 +488,11 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			});
 
 			// Terminate kernel when a canvas is closed (one kernel per canvas)
+			// Also check for output nodes and remind user to dismiss them
 			let previousCanvasPaths = new Set<string>();
+			let hasShownOutputWarningForPath = new Set<string>(); // Track which paths we've warned about
 			this.registerEvent(
-				this.app.workspace.on("layout-change", () => {
+				this.app.workspace.on("layout-change", async () => {
 					const leaves = this.app.workspace.getLeavesOfType("canvas");
 					const openPaths = new Set<string>();
 					for (const leaf of leaves) {
@@ -472,7 +500,23 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 						if (v?.file?.path) openPaths.add(v.file.path);
 					}
 					for (const path of previousCanvasPaths) {
-						if (!openPaths.has(path)) terminateKernel(path);
+						if (!openPaths.has(path)) {
+							// Canvas is being closed - check for output nodes
+							if (!hasShownOutputWarningForPath.has(path)) {
+								const data = await loadCanvasData(this.app.vault, path);
+								if (data && hasOutputNodes(data)) {
+									// Show reminder about output nodes
+									new Notice("Canvas has output nodes. Remember to use \"Dismiss all output\" if you want to clean up before closing.", 5000);
+									hasShownOutputWarningForPath.add(path);
+								}
+							}
+							// Terminate kernel
+							terminateKernel(path);
+							// Clear warning flag after a delay (canvas might be reopened)
+							setTimeout(() => {
+								hasShownOutputWarningForPath.delete(path);
+							}, 60000); // Clear after 1 minute
+						}
 					}
 					previousCanvasPaths = openPaths;
 				})
@@ -494,6 +538,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 						clearCanvasLegend(roleLabelsContainerEl);
 						clearCanvasEdgeModeLabels(roleLabelsContainerEl);
 						this.clearCanvasToolbar(roleLabelsContainerEl);
+						this.clearTemplateBanner(roleLabelsContainerEl);
 						roleLabelsContainerEl = null;
 					}
 					return;
@@ -503,8 +548,11 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 					clearCanvasLegend(roleLabelsContainerEl);
 					clearCanvasEdgeModeLabels(roleLabelsContainerEl);
 					this.clearCanvasToolbar(roleLabelsContainerEl);
+					this.clearTemplateBanner(roleLabelsContainerEl);
 				}
 				roleLabelsContainerEl = view.containerEl;
+				// Show template banner if this canvas is in the template folder
+				this.syncTemplateBanner(view.containerEl, view.file.path);
 				// Add "Run entire canvas" and "Dismiss all output" to the canvas (title bar if supported, else toolbar in container).
 				// Use a property on the view so we only add once even after plugin hot-reload (WeakSet would be cleared on reload).
 				const leaf = this.app.workspace.activeLeaf;
@@ -604,6 +652,97 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		new Notice("Tutorial canvas created. 3 workflows: Concatenation | Variable Injection | Python State. Right-click any colored node → Run node or Run chain.");
 	}
 
+	/** Duplicate a canvas template: open modal to select template, then create new canvas from it. */
+	async duplicateCanvasTemplate(): Promise<void> {
+		const templateFolder = this.settings.canvasTemplateFolder.trim();
+		if (!templateFolder) {
+			new Notice("Canvas template folder not configured. Please set it in Settings → Zettel Thinking Board → Canvas Templates.");
+			return;
+		}
+
+		const modal = new CanvasTemplateModal(
+			this.app,
+			templateFolder,
+			async (templateFile: TFile) => {
+				const outputFolder = this.settings.canvasOutputFolder.trim();
+				const newCanvasPath = await duplicateCanvasTemplate(
+					this.app.vault,
+					templateFile.path,
+					outputFolder
+				);
+
+				if (!newCanvasPath) {
+					new Notice("Failed to duplicate canvas template.");
+					return;
+				}
+
+				// Open the new canvas
+				const file = this.app.vault.getAbstractFileByPath(newCanvasPath);
+				if (file instanceof TFile) {
+					await this.app.workspace.getLeaf().openFile(file);
+					new Notice(`Canvas created: ${file.basename}`);
+				} else {
+					new Notice(`Canvas created at: ${newCanvasPath}`);
+				}
+			}
+		);
+
+		modal.open();
+	}
+
+	/** Save current canvas as template: duplicate current canvas to template folder. */
+	async saveCanvasAsTemplate(): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) {
+			new Notice("No active canvas.");
+			return;
+		}
+
+		const templateFolder = this.settings.canvasTemplateFolder.trim();
+		if (!templateFolder) {
+			new Notice("Canvas template folder not configured. Please set it in Settings → Zettel Thinking Board → Canvas Templates.");
+			return;
+		}
+
+		const currentPath = view.file.path;
+		const newTemplatePath = await saveCanvasAsTemplate(
+			this.app.vault,
+			currentPath,
+			templateFolder
+		);
+
+		if (!newTemplatePath) {
+			new Notice("Failed to save canvas as template.");
+			return;
+		}
+
+		const file = this.app.vault.getAbstractFileByPath(newTemplatePath);
+		if (file instanceof TFile) {
+			new Notice(`Template saved: ${file.basename}`);
+		} else {
+			new Notice(`Template saved at: ${newTemplatePath}`);
+		}
+	}
+
+	/** Edit canvas template: open modal to select template, then open it. */
+	async editCanvasTemplate(): Promise<void> {
+		const templateFolder = this.settings.canvasTemplateFolder.trim();
+		if (!templateFolder) {
+			new Notice("Canvas template folder not configured. Please set it in Settings → Zettel Thinking Board → Canvas Templates.");
+			return;
+		}
+
+		const modal = new CanvasTemplateModal(
+			this.app,
+			templateFolder,
+			async (templateFile: TFile) => {
+				await this.app.workspace.getLeaf().openFile(templateFile);
+			}
+		);
+
+		modal.open();
+	}
+
 	/** Returns the active canvas view if the active leaf is a canvas. */
 	getActiveCanvasView(): { canvas: unknown; file: { path: string }; containerEl: HTMLElement } | null {
 		const leaf = this.app.workspace.activeLeaf;
@@ -641,6 +780,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	}
 
 	private static readonly ZTB_TOOLBAR_CLASS = "ztb-canvas-toolbar";
+	private static readonly ZTB_TEMPLATE_BANNER_CLASS = "ztb-template-banner";
 
 	/** Remove the ZTB toolbar from the canvas container (when switching away or when addAction was used). */
 	clearCanvasToolbar(containerEl: HTMLElement): void {
@@ -661,6 +801,29 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		dismissBtn.createSpan({ cls: "ztb-toolbar-icon", text: "🗑" });
 		dismissBtn.createSpan({ cls: "ztb-toolbar-label", text: "Dismiss all output" });
 		dismissBtn.addEventListener("click", () => this.dismissAllOutput());
+	}
+
+	/** Remove the template banner from the canvas container. */
+	clearTemplateBanner(containerEl: HTMLElement): void {
+		containerEl.querySelectorAll(`.${ZettelThinkingBoardPlugin.ZTB_TEMPLATE_BANNER_CLASS}`).forEach((el) => el.remove());
+	}
+
+	/** Show or hide the template banner based on whether the canvas is in the template folder. */
+	syncTemplateBanner(containerEl: HTMLElement, canvasPath: string): void {
+		const templateFolder = this.settings.canvasTemplateFolder.trim();
+		const isTemplate = isCanvasInTemplateFolder(canvasPath, templateFolder);
+
+		const existingBanner = containerEl.querySelector(`.${ZettelThinkingBoardPlugin.ZTB_TEMPLATE_BANNER_CLASS}`);
+
+		if (isTemplate && !existingBanner) {
+			// Add banner
+			const banner = containerEl.createDiv({ cls: ZettelThinkingBoardPlugin.ZTB_TEMPLATE_BANNER_CLASS });
+			const icon = banner.createSpan({ cls: "ztb-template-banner-icon", text: "📋" });
+			const text = banner.createSpan({ cls: "ztb-template-banner-text", text: "Template Canvas" });
+		} else if (!isTemplate && existingBanner) {
+			// Remove banner
+			existingBanner.remove();
+		}
 	}
 
 	/** Run a single node (call from context menu with node id). */

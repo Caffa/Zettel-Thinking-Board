@@ -65,6 +65,7 @@ export {
 	getParentIdsSortedByY,
 	getIncomingEdgesWithLabels,
 	GREEN_NODE_PADDING,
+	hasOutputNodes,
 	isFileNode,
 	isOutputEdge,
 	isTextNode,

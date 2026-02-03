@@ -153,3 +153,8 @@ export function findOutputNodeForSource(
 	);
 	return best.id;
 }
+
+/** Check if canvas has any output nodes (green nodes connected by output edges). */
+export function hasOutputNodes(data: CanvasData): boolean {
+	return data.edges.some((e) => isOutputEdge(e));
+}

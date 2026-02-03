@@ -77,3 +77,37 @@ The plugin parses colors to determine behavior.
 *   **Auto-Layout:** When a Green node is spawned, ensure it doesn't perfectly overlap existing nodes (simple collision check or just strictly placing it below).
 *   **Context Menu:** Right-click on node -> "Run Node", "Run Chain", "Dismiss Output" (Deletes the attached Green node).
 
+## 5. Canvas Templates
+
+### 5.1. Template Management
+*   **Template Folder:** Users can configure a folder in settings to store canvas templates (e.g., `Templates/Canvases`).
+*   **Output Folder:** Users can configure a separate folder where new canvases created from templates will be saved (e.g., `Canvases`).
+*   **Template Discovery:** The plugin automatically discovers all `.canvas` files within the template folder (including subfolders).
+*   **Visual Indicator:** When viewing a canvas in the template folder, a "📋 Template Canvas" banner appears in the top-right corner.
+
+### 5.2. Creating and Managing Templates
+
+#### 5.2.1. Duplicate Canvas Template
+*   **Command:** "Duplicate canvas template" opens a modal displaying all available templates.
+*   **Template Selection:** User selects a template from the list (showing template name and path).
+*   **Duplication:** The plugin creates a complete copy of the selected template canvas in the output folder.
+*   **Auto-naming:** New canvas files are automatically named based on the template name with numeric suffixes to avoid conflicts (e.g., `Research Template`, `Research Template 1`, `Research Template 2`).
+*   **Auto-open:** After creation, the new canvas is automatically opened in the workspace.
+
+#### 5.2.2. Save Canvas as Template
+*   **Command:** "Save canvas as template" (available only when a canvas is active).
+*   **Function:** Creates a copy of the current canvas in the template folder.
+*   **Use Case:** Quickly save a working canvas as a reusable template without manual file operations.
+
+#### 5.2.3. Edit Canvas Template
+*   **Command:** "Edit canvas template" opens a modal displaying all available templates.
+*   **Template Selection:** User selects a template from the list.
+*   **Opens Template:** The selected template canvas is opened for editing.
+*   **Visual Feedback:** Template banner appears to indicate you're editing a template.
+
+### 5.3. Use Cases
+*   **Workflow Templates:** Users can create reusable canvas workflows (e.g., research pipeline, data analysis, content generation) and quickly instantiate them for different projects.
+*   **Prompt Libraries:** Store canvas templates with pre-configured prompt chains and variable injection patterns for common tasks.
+*   **Project Kickstarters:** Create standardized canvas structures for different types of projects, complete with pre-configured model roles and node arrangements.
+*   **Template Iteration:** Edit templates directly to refine workflows, then duplicate them for new projects.
+

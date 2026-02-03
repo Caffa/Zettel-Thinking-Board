@@ -93,6 +93,8 @@ export interface ZettelPluginSettings {
 	colorGreen: CanvasColor;
 	showNodeRoleLabels: boolean;
 	pythonPath: string;
+	canvasTemplateFolder: string;
+	canvasOutputFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ZettelPluginSettings = {
@@ -113,6 +115,8 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	colorGreen: "4",
 	showNodeRoleLabels: true,
 	pythonPath: "python3",
+	canvasTemplateFolder: "",
+	canvasOutputFolder: "",
 };
 
 /** Fallback hex for preset 1–6 to match Obsidian order (mod-canvas-color-N). */
@@ -412,6 +416,34 @@ export class ZettelSettingTab extends PluginSettingTab {
 				.setValue(s.pythonPath)
 				.onChange(async (value) => {
 					s.pythonPath = value || "python3";
+					await this.plugin.saveSettings();
+				}));
+
+		// Canvas Templates section
+		const templatesSection = containerEl.createDiv({ cls: "ztb-settings-section" });
+		templatesSection.createEl("h4", { text: "Canvas Templates", cls: "ztb-section-title" });
+		const templatesHint = templatesSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		templatesHint.setText("Define folders for canvas templates and where new canvases from templates should be created. Use the \"Duplicate canvas template\" command to create a new canvas from a template.");
+
+		new Setting(templatesSection)
+			.setName("Template folder")
+			.setDesc("Folder containing canvas templates (e.g. Templates/Canvases). Leave empty to disable template feature.")
+			.addText((text) => text
+				.setPlaceholder("Templates/Canvases")
+				.setValue(s.canvasTemplateFolder)
+				.onChange(async (value) => {
+					s.canvasTemplateFolder = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(templatesSection)
+			.setName("Output folder")
+			.setDesc("Folder where new canvases from templates will be created (e.g. Canvases). Leave empty to create in vault root.")
+			.addText((text) => text
+				.setPlaceholder("Canvases")
+				.setValue(s.canvasOutputFolder)
+				.onChange(async (value) => {
+					s.canvasOutputFolder = value;
 					await this.plugin.saveSettings();
 				}));
 

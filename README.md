@@ -70,6 +70,42 @@ By default, all parent outputs are concatenated and passed to the child. You can
 
 Example: Orange → Purple with edge label `draft`. In the Purple note: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." Only the draft is injected; no extra concatenation.
 
+## 🗂️ Canvas Templates
+
+Create reusable canvas workflows and quickly instantiate them for different projects.
+
+### Setup
+1. Open **Settings → Zettel Thinking Board → Canvas Templates**
+2. Configure two folders:
+   - **Template folder**: Where you store your canvas templates (e.g., `Templates/Canvases`)
+   - **Output folder**: Where new canvases from templates will be created (e.g., `Canvases`)
+
+### Commands
+
+**Duplicate canvas template**
+- Opens a modal showing all available templates
+- Select a template to create a copy in your output folder
+- New canvas opens automatically with a unique name
+
+**Save canvas as template**
+- Saves the current canvas as a new template
+- Creates a copy in your template folder
+- Works from any canvas (available only when a canvas is active)
+
+**Edit canvas template**
+- Opens a modal showing all available templates
+- Select a template to open and edit it directly
+- Template banner appears at the top-right to indicate you're editing a template
+
+### Visual Indicator
+When viewing a canvas that's in your template folder, a **"📋 Template Canvas"** banner appears in the top-right corner. This helps you know when you're editing a template vs. working with a regular canvas.
+
+### Use Cases
+- **Research pipelines** with pre-configured prompt chains
+- **Data analysis workflows** with Python nodes and variable injection
+- **Content generation templates** with reusable prompt structures
+- **Project kickstarters** with standardized node arrangements and colors
+
 ## 📚 Tutorial Canvas
 
 Run the command **"Create tutorial canvas"** to generate an interactive tutorial with 3 workflows:
