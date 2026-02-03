@@ -1,5 +1,4 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
-import ZettelThinkingBoardPlugin from "./main";
+import {App, Plugin, PluginSettingTab, Setting} from "obsidian";
 
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
@@ -39,7 +38,7 @@ const PRESET_COLORS: { value: CanvasColor; label: string }[] = [
 
 function addColorSetting(
 	containerEl: HTMLElement,
-	plugin: ZettelThinkingBoardPlugin,
+	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> },
 	role: NodeRole,
 	label: string,
 	desc: string
@@ -97,9 +96,9 @@ function addColorSetting(
 }
 
 export class ZettelSettingTab extends PluginSettingTab {
-	plugin: ZettelThinkingBoardPlugin;
+	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> };
 
-	constructor(app: App, plugin: ZettelThinkingBoardPlugin) {
+	constructor(app: App, plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> }) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -107,13 +106,14 @@ export class ZettelSettingTab extends PluginSettingTab {
 	display(): void {
 		const {containerEl} = this;
 		containerEl.empty();
+		const s = this.plugin.settings;
 
 		new Setting(containerEl)
 			.setName("Ollama model (Orange / primary LLM)")
 			.setDesc("Model ID for orange nodes (e.g. llama2)")
 			.addText((text) => text
 				.setPlaceholder("e.g. llama2")
-				.setValue(this.plugin.settings.ollamaOrangeModel)
+				.setValue(s.ollamaOrangeModel)
 				.onChange(async (value) => {
 					this.plugin.settings.ollamaOrangeModel = value;
 					await this.plugin.saveSettings();
@@ -124,9 +124,9 @@ export class ZettelSettingTab extends PluginSettingTab {
 			.setDesc("Model ID for purple nodes")
 			.addText((text) => text
 				.setPlaceholder("e.g. mistral")
-				.setValue(this.plugin.settings.ollamaPurpleModel)
+				.setValue(s.ollamaPurpleModel)
 				.onChange(async (value) => {
-					this.plugin.settings.ollamaPurpleModel = value;
+					s.ollamaPurpleModel = value;
 					await this.plugin.saveSettings();
 				}));
 
@@ -171,9 +171,9 @@ export class ZettelSettingTab extends PluginSettingTab {
 			.setDesc("Path to Python executable for Blue nodes (e.g. python3 or /usr/bin/python3)")
 			.addText((text) => text
 				.setPlaceholder("python3")
-				.setValue(this.plugin.settings.pythonPath)
+				.setValue(s.pythonPath)
 				.onChange(async (value) => {
-					this.plugin.settings.pythonPath = value || "python3";
+					s.pythonPath = value || "python3";
 					await this.plugin.saveSettings();
 				}));
 	}

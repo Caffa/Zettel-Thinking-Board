@@ -1,5 +1,5 @@
 import {ItemView, Notice, Setting, WorkspaceLeaf} from "obsidian";
-import type ZettelThinkingBoardPlugin from "../main";
+import type {IZettelThinkingBoardPlugin} from "../types";
 import {terminateKernel} from "../engine/kernelManager";
 
 export const ZETTEL_CONTROLS_VIEW_TYPE = "zettel-controls";
@@ -8,7 +8,7 @@ export const ZETTEL_CONTROLS_VIEW_TYPE = "zettel-controls";
 const envVars: Record<string, string> = {};
 
 export class ZettelControlsView extends ItemView {
-	constructor(leaf: WorkspaceLeaf, public readonly plugin: ZettelThinkingBoardPlugin) {
+	constructor(leaf: WorkspaceLeaf, public readonly plugin: IZettelThinkingBoardPlugin) {
 		super(leaf);
 	}
 
