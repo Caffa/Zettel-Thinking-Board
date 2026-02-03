@@ -1,90 +1,82 @@
-# Obsidian Zettel Thinking Board
+# Zettel Thinking Board 🧠
 
-This is a Zettel Thinking Board for Obsidian (https://obsidian.md).
+**A Visual AI Workbench for Obsidian.**
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+Zettel Thinking Board turns your Canvas into a stateful, executable flow diagram. Chain together **Local LLMs** (Ollama) and **Python Scripts** to build complex AI workflows, visualize the results, and refine your thoughts.
 
-This Zettel Thinking Board demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+## 🌟 The "Zettel" Workflow
 
-## First time developing plugins?
+Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking Board keeps your logic clean.
 
-Quick starting guide for new plugin devs:
+*   **The Chain:** Connect your Prompt (Orange) directly to your Code (Blue).
+*   **The Result:** When you run a node, a **Green Note** spawns below it displaying the result.
+*   **The Flow:** Data passes invisibly from parent to child. The Green Note is just for you to read; the Code node reads the raw data directly from the Prompt node.
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+## 🚀 Features
 
-## Releasing new releases
+*   **Color-Coded Intelligence:**
+    *   🟧 **Orange:** Primary LLM (e.g., Llama 3).
+    *   🟪 **Purple:** Secondary LLM (e.g., Mistral - great for critiquing Orange).
+    *   🟦 **Blue:** Python Code (Persistent State).
+    *   🟩 **Green:** Auto-generated output (Visual Sidecar).
+    *   🟨 **Yellow:** Comments / Static Context.
+*   **Persistent Memory:** Variables defined in one Blue node are accessible in connected Blue nodes downstream.
+*   **Side Channel Logging:** Send debug info to the side panel console without cluttering your canvas.
+*   **Recursive Execution:** "Run Chain" automatically traces back to the start and runs the entire flow to ensure context is fresh.
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/zettel-thinking-board/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+## 🛠️ Requirements
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+1.  **Obsidian** (Latest version).
+2.  **Ollama** running locally.
+3.  **Python 3** installed in your system PATH.
 
-## Adding your plugin to the community plugin list
+## 📖 Quick Start
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+### 1. Setup
+1.  Open the **Zettel Thinking Board** side panel (Right Ribbon).
+2.  Select your models for Orange and Purple inputs.
+3.  (Optional) Add Environment Variables (e.g., `MY_NAME` = `John`).
 
-## How to use
+### 2. Create a Chain
+1.  Add an **Orange Card**: "Write a haiku about rust programming."
+2.  Add a **Blue Card** and draw an arrow from **Orange -> Blue**.
+3.  In the Blue Card, write:
+    ```python
+    # 'input' is the string output from the Orange card
+    lines = input.split('\n')
+    print(f"Haiku has {len(lines)} lines") # Goes to Green Note
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+    # Send a log to the side panel
+    obsidian_log("Analyzing structure...")
+    ```
 
-## Manually installing the plugin
+### 3. Run It
+*   Right-click the **Blue Card** and select **Run Chain**.
+*   **What happens?**
+    1.  The Orange card runs. A Green note appears below it with the Haiku.
+    2.  The Blue card receives the Haiku text instantly.
+    3.  The Blue card runs. A Green note appears below it saying "Haiku has 3 lines".
+    4.  "Analyzing structure..." appears in your Side Panel Console.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+## ⚙️ Advanced: Python State
+The Python kernel stays alive as long as Obsidian is open (or until you click "Restart Kernel").
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code.
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+**Node A (Blue):**
+```python
+memory = []
 ```
 
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+**Node B (Blue - Connected to A):**
+```python
+memory.append(input)
+obsidian_log(f"Memory size: {len(memory)}")
 ```
+This allows you to build complex data accumulation workflows.
 
-## API Documentation
+## ⚠️ Security Warning
+This plugin allows the execution of **arbitrary Python code** on your machine via the Canvas.
+*   **Never** run a canvas file you downloaded from an untrusted source.
+*   The Python process runs with your user privileges.
 
-See https://docs.obsidian.md
+## 📄 License
+MIT
