@@ -830,7 +830,12 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async runNode(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
-		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const liveCanvas = canvas;
+		const viewWithData = view as unknown as { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
+		}
 		const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas);
 		if (!result.ok) new Notice(result.message ?? "Run node failed.");
 	}
@@ -839,7 +844,12 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async runChain(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
-		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const liveCanvas = canvas;
+		const viewWithData = view as unknown as { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
+		}
 		const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas);
 		if (!result.ok) new Notice(result.message ?? "Run chain failed.");
 	}
@@ -848,7 +858,12 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async dismissOutput(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
-		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const liveCanvas = canvas;
+		const viewWithData = view as unknown as { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
+		}
 		await runnerDismissOutput(this.app.vault, view.file.path, nodeId, this.settings, liveCanvas);
 	}
 
@@ -856,7 +871,12 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async runEntireCanvas(): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
-		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const liveCanvas = canvas;
+		const viewWithData = view as unknown as { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
+		}
 		const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas);
 		if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
 	}
@@ -865,7 +885,11 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async dismissAllOutput(): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
-		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const liveCanvas = canvas as import("./engine/canvasApi").LiveCanvas & { getData?: () => unknown };
+		if (!liveCanvas.getData && typeof (view as { getData?: () => unknown }).getData === "function") {
+			liveCanvas.getData = () => (view as { getData: () => unknown }).getData();
+		}
 		await runnerDismissAllOutput(this.app.vault, view.file.path, liveCanvas);
 	}
 

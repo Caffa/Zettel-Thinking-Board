@@ -13,4 +13,6 @@ export interface LiveCanvas {
 	nodes?: Map<string, unknown> | Iterable<unknown>;
 	/** If present, used to refresh canvas after edge label updates (Obsidian canvas view). */
 	setData?(data: unknown): void;
+	/** If present, returns current canvas data from the view (used to preserve user edits like node color when saving). */
+	getData?(): { nodes: Array<{ id: string; color?: string; x?: number; y?: number; width?: number; height?: number; [k: string]: unknown }>; edges: unknown[] } | undefined;
 }

@@ -280,17 +280,22 @@
 	font-weight: 600;
 }
 
-/* Role label on canvas nodes: uses Obsidian's .canvas-node-label (same as file nodes) */
+/* Role label on canvas nodes: top-right to avoid overlapping file node title (uses Obsidian's .canvas-node-label) */
 .ztb-node-role-label.canvas-node-label {
 	pointer-events: none;
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	z-index: 1;
 }
 
-/* Concatenation order badge at top-right of each node (1 = first in run order) */
+/* Concatenation order badge at top-left of each node (1 = first in run order) so it doesn't overlap the role label */
 /* Badge is positioned relative to the node; Obsidian uses transform on .canvas-node, which already creates a containing block for absolute children. Do not set .canvas-node { position: relative } or edge positions desync. */
 .ztb-node-order-badge {
 	position: absolute;
 	top: 2px;
-	right: 2px;
+	left: 2px;
+	right: auto;
 	min-width: 1.25em;
 	padding: 0 4px;
 	font-size: var(--font-smaller);

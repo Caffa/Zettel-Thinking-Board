@@ -232,6 +232,37 @@ function buildInputWithVariables(
 	};
 }
 
+/** Set of node ids that are our output/prompt/thinking nodes; we must not overwrite them with live data. */
+function getAuxiliaryNodeIds(data: CanvasData): Set<string> {
+	const auxiliaryLabels = [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING];
+	return new Set(
+		data.edges
+			.filter((e) => auxiliaryLabels.includes(parseEdgeVariableName(e.label)))
+			.map((e) => e.toNode)
+	);
+}
+
+/** Copy color (and position/size) from live canvas nodes into data for non-auxiliary nodes so we don't overwrite user edits. */
+function mergePreserveUserNodeProps(
+	data: CanvasData,
+	liveData: { nodes: Array<{ id: string; color?: string; x?: number; y?: number; width?: number; height?: number }> }
+): void {
+	const liveById = new Map(liveData.nodes.map((n) => [n.id, n]));
+	const auxiliaryIds = getAuxiliaryNodeIds(data);
+	for (const node of data.nodes) {
+		if (auxiliaryIds.has(node.id)) continue;
+		const liveNode = liveById.get(node.id);
+		if (!liveNode) continue;
+		if (liveNode.color !== undefined && liveNode.color !== "") {
+			(node as { color?: string }).color = liveNode.color;
+		}
+		if (typeof liveNode.x === "number") (node as { x: number }).x = liveNode.x;
+		if (typeof liveNode.y === "number") (node as { y: number }).y = liveNode.y;
+		if (typeof liveNode.width === "number") (node as { width: number }).width = liveNode.width;
+		if (typeof liveNode.height === "number") (node as { height: number }).height = liveNode.height;
+	}
+}
+
 /** Persist only base variable name in edge.label; store inject/concatenate in state for floating label. */
 async function updateEdgeLabelsAndSave(
 	vault: App["vault"],
@@ -257,6 +288,19 @@ async function updateEdgeLabelsAndSave(
 			changed = true;
 		}
 	}
+	// Preserve user edits (e.g. node color) from live canvas before we overwrite with our data
+	const liveData = liveCanvas?.getData?.();
+	// #region agent log
+	const nodeBeforeMerge = getNodeById(data, nodeId);
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "before merge", data: { nodeId, nodeColorBefore: nodeBeforeMerge ? (nodeBeforeMerge as { color?: string }).color : undefined, hasGetData: typeof liveCanvas?.getData === "function", liveNodeCount: liveData?.nodes?.length }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "B" }) }).catch(() => {});
+	// #endregion
+	if (liveData?.nodes) {
+		mergePreserveUserNodeProps(data, liveData);
+		// #region agent log
+		const nodeAfterMerge = getNodeById(data, nodeId);
+		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "after merge", data: { nodeId, nodeColorAfter: nodeAfterMerge ? (nodeAfterMerge as { color?: string }).color : undefined }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "C" }) }).catch(() => {});
+		// #endregion
+	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave(); // so Obsidian marks canvas dirty and won't overwrite on tab switch
@@ -276,6 +320,9 @@ async function runSingleNode(
 ): Promise<string> {
 	const node = getNodeById(data, nodeId);
 	if (!node) return "";
+	// #region agent log
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runSingleNode", message: "entry node color from loaded data", data: { nodeId, nodeType: (node as { type?: string }).type, nodeColor: (node as { color?: string }).color }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "A" }) }).catch(() => {});
+	// #endregion
 	const role = getNodeRole(node, settings);
 	if (!role || role === "yellow" || role === "green") {
 		// Yellow = text (input pass-through): merge parent results with own content, same as AI/Python nodes
@@ -299,6 +346,8 @@ async function runSingleNode(
 		const raw = getTextNodeContent(node as CanvasTextData);
 		if (!isPythonCodeFenced(raw)) {
 			(node as CanvasTextData).text = ensurePythonCodeFence(raw);
+			const liveData = liveCanvas?.getData?.();
+			if (liveData?.nodes) mergePreserveUserNodeProps(data, liveData);
 			liveCanvas?.setData?.(data);
 			if (liveCanvas?.requestSave) liveCanvas.requestSave();
 			await saveCanvasData(app.vault, canvasFilePath, data);
@@ -819,6 +868,8 @@ export async function dismissOutput(
 		(e) =>
 			!(e.fromNode === sourceNodeId && toRemove.has(e.toNode) && [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING].includes(parseEdgeVariableName(e.label)))
 	);
+	const liveData = liveCanvas?.getData?.();
+	if (liveData?.nodes) mergePreserveUserNodeProps(data, liveData);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
@@ -841,6 +892,8 @@ export async function dismissAllOutput(
 	);
 	data.nodes = data.nodes.filter((n) => !auxiliaryNodeIds.has(n.id));
 	data.edges = data.edges.filter((e) => !auxiliaryLabels.includes(parseEdgeVariableName(e.label)));
+	const liveData = liveCanvas?.getData?.();
+	if (liveData?.nodes) mergePreserveUserNodeProps(data, liveData);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
