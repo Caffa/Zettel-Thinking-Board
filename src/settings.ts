@@ -391,22 +391,21 @@ export class ZettelSettingTab extends PluginSettingTab {
 
 		/*
 		 * UX philosophy for this tab:
-		 * - Group by concept, not by control type: each "model" is one place (model + label + color).
-		 * - Progressive disclosure: collapsible blocks so primary is visible by default; secondary/tertiary can stay collapsed.
-		 * - Summary shows current choice when collapsed (e.g. "Primary model — llama2") so users can scan without expanding.
-		 * - Execution first (what runs), then Display (how it looks for non-model nodes and labels).
+		 * - Logical flow: Setup (dependencies) → Configuration (models, execution) → Display (appearance) → Templates (optional)
+		 * - Progressive disclosure: auto-collapse setup when complete, collapsible model blocks
+		 * - Clear hierarchy: sections → subsections → settings
+		 * - Consistent spacing and grouping
 		 */
 
-		// How to run: one-line hint
-		const hint = containerEl.createDiv({ cls: "ztb-settings-hint setting-item-description" });
-		hint.setText("Right-click a node on the canvas and choose Run node or Run chain.");
-
-		// Installation & Dependencies section (new section at the top)
+		// Installation & Dependencies section - auto-collapses when everything is installed
 		this.addInstallationSection(containerEl);
 
-		// Execution: model blocks (each: model + label + color) then Python
+		// Execution section: model configuration
 		const executionSection = containerEl.createDiv({ cls: "ztb-settings-section" });
-		executionSection.createEl("h4", { text: "Execution", cls: "ztb-section-title" });
+		executionSection.createEl("h4", { text: "Model Configuration", cls: "ztb-section-title" });
+		const executionHint = executionSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		executionHint.setText("Configure AI models and execution settings. Right-click a node on the canvas and choose Run node or Run chain to execute.");
+		
 		const ollamaContainer = executionSection.createDiv({ cls: "ztb-ollama-settings" });
 		const loadingEl = ollamaContainer.createDiv({ cls: "ztb-ollama-loading" });
 		loadingEl.setText("Loading Ollama models…");
@@ -415,7 +414,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 			loadingEl.remove();
 			if (models.length === 0) {
 				const fallback = ollamaContainer.createDiv({ cls: "ztb-ollama-fallback" });
-				fallback.createEl("p", { text: "Ollama not reachable or no models. Enter model names manually." });
+				fallback.createEl("p", { text: "Ollama not reachable or no models installed. Enter model names manually or check Installation & Dependencies section above." });
 			}
 			// One collapsible block per model role: primary (expanded), secondary and tertiary (collapsed)
 			addModelBlock(ollamaContainer, "orange", models.length === 0 ? null : models, this.plugin);
@@ -433,6 +432,44 @@ export class ZettelSettingTab extends PluginSettingTab {
 					s.pythonPath = value || "python3";
 					await this.plugin.saveSettings();
 				}));
+
+		// Display section: appearance settings
+		const displaySection = containerEl.createDiv({ cls: "ztb-settings-section" });
+		displaySection.createEl("h4", { text: "Display", cls: "ztb-section-title" });
+		const displayHint = displaySection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		displayHint.setText("Configure how nodes appear on the canvas. Each node type should have a unique color. Uncolored or unused-color nodes are not part of the execution graph.");
+
+		new Setting(displaySection)
+			.setName("Show role labels on canvas")
+			.setDesc("Show a floating label above each node (e.g. Model: llama2, Text, Python) based on its color")
+			.addToggle((toggle) => toggle
+				.setValue(s.showNodeRoleLabels)
+				.onChange(async (value) => {
+					this.plugin.settings.showNodeRoleLabels = value;
+					await this.plugin.saveSettings();
+				}));
+		
+		addColorSetting(
+			displaySection,
+			this.plugin,
+			"blue",
+			"Python node color",
+			"Color for Python execution nodes on the canvas"
+		);
+		addColorSetting(
+			displaySection,
+			this.plugin,
+			"yellow",
+			"Text node color",
+			"Color for text (input) nodes: pass-through text, no AI processing"
+		);
+		addColorSetting(
+			displaySection,
+			this.plugin,
+			"green",
+			"Output node color",
+			"Color for auto-generated output nodes on the canvas"
+		);
 
 		// Canvas Templates section
 		const templatesSection = containerEl.createDiv({ cls: "ztb-settings-section" });
@@ -461,54 +498,23 @@ export class ZettelSettingTab extends PluginSettingTab {
 					s.canvasOutputFolder = value;
 					await this.plugin.saveSettings();
 				}));
-
-		// Display: colors for non-model nodes and label visibility (model colors live inside each model block)
-		const displaySection = containerEl.createDiv({ cls: "ztb-settings-section" });
-		displaySection.createEl("h4", { text: "Display", cls: "ztb-section-title" });
-		const displayHint = displaySection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
-		displayHint.setText("Each node type should have a unique color. Uncolored or unused-color nodes are not part of the execution graph and do not add to any prompt.");
-		addColorSetting(
-			displaySection,
-			this.plugin,
-			"blue",
-			"Python node",
-			"Color for the Python node on the canvas"
-		);
-		addColorSetting(
-			displaySection,
-			this.plugin,
-			"yellow",
-			"Text node",
-			"Color for the text (input) node: pass-through input text, no AI. Uncolored or unused-color nodes are not connected and do not add to any prompt."
-		);
-		addColorSetting(
-			displaySection,
-			this.plugin,
-			"green",
-			"Output node",
-			"Color for auto-generated output nodes on the canvas"
-		);
-
-		new Setting(displaySection)
-			.setName("Show role labels on canvas")
-			.setDesc("Show a floating label above each node (e.g. Text, Python) based on its color")
-			.addToggle((toggle) => toggle
-				.setValue(s.showNodeRoleLabels)
-				.onChange(async (value) => {
-					this.plugin.settings.showNodeRoleLabels = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 
 	private addInstallationSection(containerEl: HTMLElement): void {
 		const installSection = containerEl.createDiv({ cls: "ztb-settings-section" });
-		installSection.createEl("h4", { text: "Installation & Dependencies", cls: "ztb-section-title" });
+		
+		// Create collapsible details element for the entire installation section
+		const details = installSection.createEl("details", { cls: "ztb-install-section" });
+		const summary = details.createEl("summary", { cls: "ztb-section-title-clickable" });
+		summary.createEl("h4", { text: "Installation & Dependencies", cls: "ztb-section-title-inline" });
+		
+		const content = details.createDiv({ cls: "ztb-install-section-content" });
 
-		const installHint = installSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		const installHint = content.createDiv({ cls: "ztb-settings-hint setting-item-description" });
 		installHint.setText("Ensure Python and Ollama are installed before using the plugin. Download recommended models for optimal performance.");
 
 		// Python installation check
-		const pythonContainer = installSection.createDiv({ cls: "ztb-install-check" });
+		const pythonContainer = content.createDiv({ cls: "ztb-install-check" });
 		const pythonStatus = pythonContainer.createDiv({ cls: "ztb-install-status" });
 		pythonStatus.setText("Checking Python installation...");
 
@@ -538,7 +544,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 				}));
 
 		// Ollama installation check
-		const ollamaContainer = installSection.createDiv({ cls: "ztb-install-check" });
+		const ollamaContainer = content.createDiv({ cls: "ztb-install-check" });
 		const ollamaStatus = ollamaContainer.createDiv({ cls: "ztb-install-status" });
 		ollamaStatus.setText("Checking Ollama installation...");
 
@@ -585,7 +591,25 @@ export class ZettelSettingTab extends PluginSettingTab {
 					openInstallationPage("ollama");
 				}));
 
-		// Auto-check on load
+		// Recommended models subsection - also collapsible
+		const modelsDetails = content.createEl("details", { cls: "ztb-models-subsection" });
+		const modelsSummary = modelsDetails.createEl("summary", { cls: "ztb-subsection-summary" });
+		modelsSummary.createEl("h5", { text: "Recommended Models", cls: "ztb-subsection-title-inline" });
+		
+		const modelsContent = modelsDetails.createDiv({ cls: "ztb-models-subsection-content" });
+		const modelsHint = modelsContent.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		modelsHint.setText("Download these models for optimal performance. Each model is optimized for different tasks.");
+
+		// Store model status elements for auto-collapse check
+		const modelStatusElements: { element: HTMLElement; modelName: string }[] = [];
+
+		// Add each recommended model
+		for (const model of RECOMMENDED_MODELS) {
+			const statusElement = this.addModelDownloadSetting(modelsContent, model);
+			modelStatusElements.push({ element: statusElement, modelName: model.name });
+		}
+
+		// Auto-check on load and determine if sections should be collapsed
 		(async () => {
 			const pythonCheck = await checkPythonInstallation();
 			if (pythonCheck.installed) {
@@ -607,20 +631,49 @@ export class ZettelSettingTab extends PluginSettingTab {
 				ollamaStatus.setText("✗ Ollama not found. Click 'Install instructions' for help.");
 				ollamaStatus.style.color = "var(--text-error)";
 			}
+
+			// Check if all dependencies are satisfied
+			const pythonOk = pythonCheck.installed;
+			const ollamaOk = ollamaCheck.installed && ollamaCheck.running;
+			
+			// Check if all recommended models are installed
+			let allModelsInstalled = true;
+			for (const { modelName } of modelStatusElements) {
+				const installed = await checkModelInstalled(modelName);
+				if (!installed) {
+					allModelsInstalled = false;
+					break;
+				}
+			}
+
+			// Auto-collapse recommended models section if all are installed
+			modelsDetails.open = !allModelsInstalled;
+			
+			// Update models summary to show status
+			if (allModelsInstalled) {
+				modelsSummary.setText("Recommended Models — All installed ✓");
+			} else {
+				modelsSummary.setText("Recommended Models — Some models need installation");
+			}
+
+			// Auto-collapse main installation section if Python + Ollama are ready
+			// Keep it open if there are issues that need attention
+			details.open = !(pythonOk && ollamaOk);
+			
+			// Update main summary to show overall status
+			if (pythonOk && ollamaOk) {
+				summary.setText("Installation & Dependencies — Ready ✓");
+			} else if (pythonOk && !ollamaOk) {
+				summary.setText("Installation & Dependencies — Ollama needs attention");
+			} else if (!pythonOk && ollamaOk) {
+				summary.setText("Installation & Dependencies — Python needs attention");
+			} else {
+				summary.setText("Installation & Dependencies — Setup required");
+			}
 		})();
-
-		// Recommended models section
-		installSection.createEl("h5", { text: "Recommended Models", cls: "ztb-subsection-title" });
-		const modelsHint = installSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
-		modelsHint.setText("Download these models for optimal performance. Each model is optimized for different tasks.");
-
-		// Add each recommended model
-		for (const model of RECOMMENDED_MODELS) {
-			this.addModelDownloadSetting(installSection, model);
-		}
 	}
 
-	private addModelDownloadSetting(containerEl: HTMLElement, model: RecommendedModel): void {
+	private addModelDownloadSetting(containerEl: HTMLElement, model: RecommendedModel): HTMLElement {
 		const modelContainer = containerEl.createDiv({ cls: "ztb-model-download" });
 		const statusDiv = modelContainer.createDiv({ cls: "ztb-model-status" });
 		statusDiv.setText("Checking...");
@@ -678,5 +731,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 				statusDiv.style.color = "var(--text-muted)";
 			}
 		})();
+
+		return statusDiv;
 	}
 }

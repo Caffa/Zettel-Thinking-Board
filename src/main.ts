@@ -576,6 +576,9 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas, isStillActive);
 				if (roleLabelsIntervalId == null) {
 					roleLabelsIntervalId = window.setInterval(() => {
+						// #region agent log
+						fetch('http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.ts:578',message:'Label sync interval fired',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+						// #endregion
 						const v = this.getActiveCanvasView();
 						if (v != null && v.containerEl === roleLabelsContainerEl) {
 							const stillActive = (): boolean => this.getActiveCanvasView()?.containerEl === roleLabelsContainerEl;
