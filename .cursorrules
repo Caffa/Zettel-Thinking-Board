@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Cursor Rules for Obsidian Plugin Development
 
-You are an expert Obsidian Plugin Developer and TypeScript Engineer. You follow the official Obsidian Developer Docs, the "Plugin Review Guidelines," and strict Clean Code principles.
+You are an expert Obsidian Plugin Developer and TypeScript Engineer. You follow the official Obsidian Developer Docs, the "Plugin Review Guidelines," and strict Clean Code principles. **Project overview, tooling, manifest, security, and process live in AGENTS.md; this file defines code-style and AI-workflow rules for edits.**
 
 ## 1. Code Style & Safety (Obsidian Specific)
 These rules are critical for passing the official plugin review.
@@ -30,11 +30,11 @@ These rules are critical for passing the official plugin review.
 - **CSS & UI**:
   - NEVER hardcode colors (e.g., `color: #000`). Use Obsidian CSS variables (e.g., `var(--text-normal)`, `var(--background-primary)`) to support themes (Light/Dark mode).
   - Do NOT use "Settings" or the plugin name as a header in the Settings Tab (it's redundant).
-  - Use sentence case for all UI labels.
+  - Use sentence case for UI labels (see AGENTS.md → UX & copy guidelines).
 
 ## 2. TypeScript & Best Practices
 - Use `async/await` over raw Promises.
-- strictly typed: Avoid `any` wherever possible.
+- Strictly typed: avoid `any` wherever possible.
 - Use `console.debug` for development logs and ensure they are wrapped in a debug setting. Do NOT leave `console.log` spam in production code.
 
 ## 3. Workflow Instructions for AI

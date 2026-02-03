@@ -8,13 +8,17 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"lint": "eslint ."
+		"lint": "eslint .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"deploy-to-vault": "npm run build && mkdir -p zettel-thinking-board && cp main.js manifest.json styles.css zettel-thinking-board && echo 'Copied to zettel-thinking-board/. Copy that folder to your vault .obsidian/plugins/zettel-thinking-board/'"
 	},
 	"keywords": [],
 	"license": "0-BSD",
 	"devDependencies": {
 		"@types/node": "^16.11.6",
 		"esbuild": "0.25.5",
+		"vitest": "^1.6.0",
 		"eslint-plugin-obsidianmd": "0.1.9",
 		"globals": "14.0.0",
 		"tslib": "2.4.0",

@@ -11,4 +11,6 @@ export interface LiveCanvas {
 	requestSave?: () => void;
 	removeNode?(node: unknown): void;
 	nodes?: Map<string, unknown> | Iterable<unknown>;
+	/** If present, used to refresh canvas after edge label updates (Obsidian canvas view). */
+	setData?(data: unknown): void;
 }

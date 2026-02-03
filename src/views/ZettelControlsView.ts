@@ -30,8 +30,8 @@ export class ZettelControlsView extends ItemView {
 		// Model mapping (persisted; same as settings)
 		el.createEl("h4", { text: "Model mapping", cls: "ztb-section-title" });
 		new Setting(el)
-			.setName("Orange (primary LLM)")
-			.setDesc("Ollama model for orange nodes")
+			.setName("Model node (primary)")
+			.setDesc("Ollama model for primary model nodes")
 			.addText((text) =>
 				text
 					.setPlaceholder("e.g. llama2")
@@ -42,8 +42,8 @@ export class ZettelControlsView extends ItemView {
 					})
 			);
 		new Setting(el)
-			.setName("Purple (secondary LLM)")
-			.setDesc("Ollama model for purple nodes")
+			.setName("Model node (secondary)")
+			.setDesc("Ollama model for secondary model nodes")
 			.addText((text) =>
 				text
 					.setPlaceholder("e.g. mistral")
@@ -61,7 +61,7 @@ export class ZettelControlsView extends ItemView {
 			.setDesc("Restart the kernel for the active canvas")
 			.addButton((btn) =>
 				btn.setButtonText("Restart kernel").onClick(() => {
-					const view = this.plugin.getActiveCanvasView();
+					const view = this.plugin.getActiveOrFirstCanvasView();
 					if (!view) {
 						new Notice("Open a canvas first.");
 						return;

@@ -1,5 +1,23 @@
 const OLLAMA_BASE = "http://localhost:11434";
 
+/** Response from GET /api/tags */
+interface OllamaTagsResponse {
+	models?: { name: string }[];
+}
+
+/** Fetch list of available Ollama model names. Returns [] if Ollama is not running or request fails. */
+export async function fetchOllamaModels(): Promise<string[]> {
+	try {
+		const res = await fetch(`${OLLAMA_BASE}/api/tags`);
+		if (!res.ok) return [];
+		const data = (await res.json()) as OllamaTagsResponse;
+		const models = data.models ?? [];
+		return models.map((m) => m.name).filter(Boolean);
+	} catch {
+		return [];
+	}
+}
+
 export interface OllamaGenerateOptions {
 	model: string;
 	prompt: string;

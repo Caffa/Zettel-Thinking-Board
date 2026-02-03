@@ -7,6 +7,7 @@ export interface IZettelThinkingBoardPlugin {
 	settings: ZettelPluginSettings;
 	saveSettings(): Promise<void>;
 	getActiveCanvasView(): { canvas: unknown; file: { path: string } } | null;
+	getActiveOrFirstCanvasView(): { canvas: unknown; file: { path: string } } | null;
 	getKernelForActiveCanvas(): { onLog?: ((line: string) => void) | undefined; run(code: string, inputText: string): Promise<string>; terminate(): void } | null;
 	registerEvent(ref: unknown): void;
 }

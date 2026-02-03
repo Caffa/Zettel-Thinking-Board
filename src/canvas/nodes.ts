@@ -23,6 +23,17 @@ export async function loadCanvasData(vault: Vault, filePath: string): Promise<Ca
 	return null;
 }
 
+/** Save canvas data to vault (writes the canvas file). */
+export async function saveCanvasData(vault: Vault, filePath: string, data: CanvasData): Promise<boolean> {
+	try {
+		const raw = JSON.stringify(data);
+		await vault.adapter.write(filePath, raw);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 /** Get input content for a node: text node content or full file content. */
 export async function getNodeContent(
 	node: AllCanvasNodeData,
@@ -47,12 +58,16 @@ export async function getNodeContent(
 
 // Re-export for callers
 export {
+	EDGE_LABEL_OUTPUT,
 	findOutputNodeForSource,
 	getNodeById,
 	getNodeRole,
 	getParentIdsSortedByY,
+	getIncomingEdgesWithLabels,
 	GREEN_NODE_PADDING,
 	isFileNode,
+	isOutputEdge,
 	isTextNode,
+	parseEdgeVariableName,
 } from "./types";
-export type {CanvasData, AllCanvasNodeData} from "./types";
+export type {CanvasData, AllCanvasNodeData, IncomingEdgeInfo} from "./types";

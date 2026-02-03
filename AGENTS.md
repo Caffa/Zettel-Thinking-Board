@@ -1,10 +1,5 @@
 ---
-description: 
-alwaysApply: true
----
-
----
-description: 
+description:
 alwaysApply: true
 ---
 
@@ -121,7 +116,7 @@ Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particula
 - Clearly disclose any external services used, data sent, and risks.
 - Respect user privacy. Do not collect vault contents, filenames, or personal information unless absolutely necessary and explicitly consented.
 - Avoid deceptive patterns, ads, or spammy notifications.
-- Register and clean up all DOM, app, and interval listeners using the provided `register*` helpers so the plugin unloads safely.
+- Register and clean up all DOM, app, and interval listeners (see .cursorrules for required patterns).
 
 ## UX & copy guidelines (for UI text, commands, settings)
 
@@ -141,6 +136,7 @@ Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particula
 ## Coding conventions
 
 - TypeScript with `"strict": true` preferred.
+- For Obsidian-specific code safety (DOM, `registerEvent`/`registerInterval`, API usage, CSS variables) and AI workflow, see **.cursorrules**.
 - **Keep `main.ts` minimal**: Focus only on plugin lifecycle (onload, onunload, addCommand calls). Delegate all feature logic to separate modules.
 - **Split large files**: If any file exceeds ~200-300 lines, consider breaking it into smaller, focused modules.
 - **Use clear module boundaries**: Each file should have a single, well-defined responsibility.
@@ -159,8 +155,7 @@ Follow Obsidian's **Developer Policies** and **Plugin Guidelines**. In particula
 **Do**
 - Add commands with stable IDs (don't rename once released).
 - Provide defaults and validation in settings.
-- Write idempotent code paths so reload/unload doesn't leak listeners or intervals.
-- Use `this.register*` helpers for everything that needs cleanup.
+- Write idempotent code paths so reload/unload doesn't leak listeners or intervals; use `register*` helpers for cleanup (see .cursorrules).
 
 **Don't**
 - Introduce network calls without an obvious user-facing reason and documentation.

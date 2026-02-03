@@ -9,8 +9,8 @@ Zettel Thinking Board turns your Canvas into a stateful, executable flow diagram
 Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking Board keeps your logic clean.
 
 *   **The Chain:** Connect your Prompt (Orange) directly to your Code (Blue).
-*   **The Result:** When you run a node, a **Green Note** spawns below it displaying the result.
-*   **The Flow:** Data passes invisibly from parent to child. The Green Note is just for you to read; the Code node reads the raw data directly from the Prompt node.
+*   **The Result:** When you run a node, a **Green Note** spawns below it (or updates if it already exists), connected by an edge labeled **`output`**. Re-running replaces the green note's content.
+*   **The Flow:** Data passes invisibly from parent to child. The Green Note is just for you to read; the Code node reads the raw data directly from the Prompt node. The `output` edge is reserved—Run Node and Run Chain ignore it (green notes are not part of the execution graph).
 
 ## 🚀 Features
 
@@ -21,7 +21,7 @@ Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking
     *   🟩 **Green:** Auto-generated output (Visual Sidecar).
     *   🟨 **Yellow:** Comments / Static Context.
 *   **Persistent Memory:** Variables defined in one Blue node are accessible in connected Blue nodes downstream.
-*   **Edge variable injection:** Put a **variable name** on an edge (edit the edge label). In the target note, use `{{var:variableName}}` to inject that parent's output at that spot instead of concatenating it. Edges update after run to show "(injected)" or "(concatenated)".
+*   **Edge variable injection:** Put a **variable name** on an edge (edit the edge label). In the target note, use `{{var:variableName}}` to inject that parent's output at that spot instead of concatenating it. Edges update after run to show "(injected)" or "(concatenated)". The label **`output`** is reserved for the run node → green output note and is not a variable name; Run Node / Run Chain ignore output edges.
 *   **Side Channel Logging:** Send debug info to the side panel console without cluttering your canvas.
 *   **Recursive Execution:** "Run Chain" automatically traces back to the start and runs the entire flow to ensure context is fresh.
 
