@@ -436,7 +436,65 @@
 	white-space: nowrap;
 }
 
-/* Installation & Dependencies Section */
+/* Settings sections — consistent spacing and hierarchy */
+.ztb-settings-section {
+	margin-bottom: var(--size-4-8);
+}
+
+.ztb-settings-hint {
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.4;
+}
+
+/* Installation & Dependencies Section — collapsible main section */
+.ztb-install-section {
+	margin-bottom: var(--size-4-8);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary-alt);
+}
+
+.ztb-section-title-clickable {
+	padding: var(--size-2-1) var(--size-4-2);
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	align-items: center;
+}
+
+.ztb-section-title-clickable::-webkit-details-marker {
+	display: none;
+}
+
+.ztb-section-title-clickable::before {
+	content: "▸ ";
+	display: inline-block;
+	width: 1em;
+	margin-right: var(--size-2-1);
+	transition: transform 0.15s ease;
+	flex-shrink: 0;
+}
+
+.ztb-install-section[open] .ztb-section-title-clickable::before {
+	transform: rotate(90deg);
+}
+
+.ztb-section-title-inline {
+	margin: 0;
+	display: inline;
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.ztb-install-section-content {
+	padding: 0 var(--size-4-2) var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Installation checks */
 .ztb-install-check {
 	margin-bottom: var(--size-4-4);
 }
@@ -451,11 +509,50 @@
 	font-weight: 500;
 }
 
-.ztb-subsection-title {
-	color: var(--text-normal);
+/* Recommended Models subsection — nested collapsible */
+.ztb-models-subsection {
+	margin-top: var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+}
+
+.ztb-subsection-summary {
+	padding: var(--size-2-1) var(--size-4-2);
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	align-items: center;
+}
+
+.ztb-subsection-summary::-webkit-details-marker {
+	display: none;
+}
+
+.ztb-subsection-summary::before {
+	content: "▸ ";
+	display: inline-block;
+	width: 1em;
+	margin-right: var(--size-2-1);
+	transition: transform 0.15s ease;
+	flex-shrink: 0;
+}
+
+.ztb-models-subsection[open] .ztb-subsection-summary::before {
+	transform: rotate(90deg);
+}
+
+.ztb-subsection-title-inline {
+	margin: 0;
+	display: inline;
 	font-size: var(--font-ui-small);
 	font-weight: 600;
-	margin: var(--size-4-4) 0 var(--size-2-1);
+	color: var(--text-normal);
+}
+
+.ztb-models-subsection-content {
+	padding: 0 var(--size-4-2) var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 .ztb-model-download {
@@ -481,4 +578,17 @@
 .ztb-install-check .setting-item-control button:first-child,
 .ztb-model-download .setting-item-control button:first-child {
 	margin-left: 0;
+}
+
+/* Ollama settings container */
+.ztb-ollama-settings {
+	margin-bottom: var(--size-4-2);
+}
+
+.ztb-ollama-loading,
+.ztb-ollama-fallback {
+	padding: var(--size-2-1) var(--size-4-2);
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
