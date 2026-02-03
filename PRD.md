@@ -111,3 +111,40 @@ The plugin parses colors to determine behavior.
 *   **Project Kickstarters:** Create standardized canvas structures for different types of projects, complete with pre-configured model roles and node arrangements.
 *   **Template Iteration:** Edit templates directly to refine workflows, then duplicate them for new projects.
 
+## 6. Installation & Dependencies
+
+### 6.1. Dependency Management
+*   **Installation Section:** A dedicated section in settings for managing dependencies (Python, Ollama) and recommended models.
+*   **Status Checks:** Buttons to check installation status of Python and Ollama, showing version info when installed.
+*   **Installation Instructions:** Direct links to installation pages and platform-specific instructions via notices.
+*   **Service Management:** Button to start Ollama service if installed but not running.
+
+### 6.2. Recommended Models
+The plugin recommends three specific Ollama models optimized for different tasks:
+
+#### 6.2.1. gemma3:4b (3.3 GB)
+*   **Purpose:** Text cleaning and quick processing
+*   **Use Case:** Fast, lightweight model for simple tasks like text formatting, cleaning, and basic transformations
+*   **Configuration:** Ideal for primary or secondary model slot when speed is prioritized
+
+#### 6.2.2. gemma3:27b (17 GB)
+*   **Purpose:** Conversation and complex reasoning
+*   **Use Case:** Large, high-quality model for detailed responses, complex conversations, and nuanced understanding
+*   **Configuration:** Ideal for primary model slot when quality is prioritized
+
+#### 6.2.3. deepseek-r1:32b (19 GB)
+*   **Purpose:** Logical text breakdown and analysis
+*   **Use Case:** Advanced reasoning model for complex analysis, logical reasoning, structured thinking, and multi-step problem solving
+*   **Configuration:** Ideal for tertiary model slot for specialized analytical tasks
+
+### 6.3. Model Download UI
+*   **Check Status:** Button to verify if each recommended model is already installed
+*   **Download:** One-click download button that runs `ollama pull <model>` in background
+*   **Progress Feedback:** Status indicators showing download progress and completion
+*   **Post-Download:** Automatic status update to show successful installation
+
+### 6.4. Desktop-Only Features
+*   All dependency checks and installation helpers require Obsidian desktop app (not available on mobile)
+*   Uses Node.js `child_process` module for executing system commands
+*   Graceful degradation: features are hidden or disabled on mobile platforms
+

@@ -1,5 +1,17 @@
-import {App, Plugin, PluginSettingTab, Setting} from "obsidian";
+import {App, Plugin, PluginSettingTab, Setting, Notice} from "obsidian";
 import {fetchOllamaModels} from "./engine/ollama";
+import {
+	checkPythonInstallation,
+	checkOllamaInstallation,
+	checkModelInstalled,
+	downloadOllamaModel,
+	startOllamaService,
+	getPythonInstallInstructions,
+	getOllamaInstallInstructions,
+	openInstallationPage,
+	RECOMMENDED_MODELS,
+	type RecommendedModel,
+} from "./engine/installer";
 
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
@@ -389,6 +401,9 @@ export class ZettelSettingTab extends PluginSettingTab {
 		const hint = containerEl.createDiv({ cls: "ztb-settings-hint setting-item-description" });
 		hint.setText("Right-click a node on the canvas and choose Run node or Run chain.");
 
+		// Installation & Dependencies section (new section at the top)
+		this.addInstallationSection(containerEl);
+
 		// Execution: model blocks (each: model + label + color) then Python
 		const executionSection = containerEl.createDiv({ cls: "ztb-settings-section" });
 		executionSection.createEl("h4", { text: "Execution", cls: "ztb-section-title" });
@@ -483,5 +498,185 @@ export class ZettelSettingTab extends PluginSettingTab {
 					this.plugin.settings.showNodeRoleLabels = value;
 					await this.plugin.saveSettings();
 				}));
+	}
+
+	private addInstallationSection(containerEl: HTMLElement): void {
+		const installSection = containerEl.createDiv({ cls: "ztb-settings-section" });
+		installSection.createEl("h4", { text: "Installation & Dependencies", cls: "ztb-section-title" });
+
+		const installHint = installSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		installHint.setText("Ensure Python and Ollama are installed before using the plugin. Download recommended models for optimal performance.");
+
+		// Python installation check
+		const pythonContainer = installSection.createDiv({ cls: "ztb-install-check" });
+		const pythonStatus = pythonContainer.createDiv({ cls: "ztb-install-status" });
+		pythonStatus.setText("Checking Python installation...");
+
+		new Setting(pythonContainer)
+			.setName("Python")
+			.setDesc("Required for Python nodes. Recommended: Python 3.8 or higher.")
+			.addButton((button) => button
+				.setButtonText("Check status")
+				.onClick(async () => {
+					button.setDisabled(true);
+					const status = await checkPythonInstallation();
+					if (status.installed) {
+						pythonStatus.setText(`✓ Python installed: ${status.version || "Unknown version"}`);
+						pythonStatus.style.color = "var(--text-success)";
+					} else {
+						pythonStatus.setText("✗ Python not found");
+						pythonStatus.style.color = "var(--text-error)";
+					}
+					button.setDisabled(false);
+				}))
+			.addButton((button) => button
+				.setButtonText("Install instructions")
+				.onClick(() => {
+					const instructions = getPythonInstallInstructions();
+					new Notice(instructions, 10000);
+					openInstallationPage("python");
+				}));
+
+		// Ollama installation check
+		const ollamaContainer = installSection.createDiv({ cls: "ztb-install-check" });
+		const ollamaStatus = ollamaContainer.createDiv({ cls: "ztb-install-status" });
+		ollamaStatus.setText("Checking Ollama installation...");
+
+		new Setting(ollamaContainer)
+			.setName("Ollama")
+			.setDesc("Required for AI model nodes. Provides local LLM inference.")
+			.addButton((button) => button
+				.setButtonText("Check status")
+				.onClick(async () => {
+					button.setDisabled(true);
+					const status = await checkOllamaInstallation();
+					if (status.installed && status.running) {
+						ollamaStatus.setText(`✓ Ollama installed and running: ${status.version || "Unknown version"}`);
+						ollamaStatus.style.color = "var(--text-success)";
+					} else if (status.installed && !status.running) {
+						ollamaStatus.setText(`⚠ Ollama installed but not running: ${status.version || "Unknown version"}`);
+						ollamaStatus.style.color = "var(--text-warning)";
+					} else {
+						ollamaStatus.setText("✗ Ollama not found");
+						ollamaStatus.style.color = "var(--text-error)";
+					}
+					button.setDisabled(false);
+				}))
+			.addButton((button) => button
+				.setButtonText("Start service")
+				.onClick(async () => {
+					button.setDisabled(true);
+					new Notice("Starting Ollama service...");
+					const started = await startOllamaService();
+					if (started) {
+						ollamaStatus.setText("✓ Ollama service started");
+						ollamaStatus.style.color = "var(--text-success)";
+						new Notice("Ollama service started successfully");
+					} else {
+						new Notice("Failed to start Ollama service. Please start it manually.");
+					}
+					button.setDisabled(false);
+				}))
+			.addButton((button) => button
+				.setButtonText("Install instructions")
+				.onClick(() => {
+					const instructions = getOllamaInstallInstructions();
+					new Notice(instructions, 10000);
+					openInstallationPage("ollama");
+				}));
+
+		// Auto-check on load
+		(async () => {
+			const pythonCheck = await checkPythonInstallation();
+			if (pythonCheck.installed) {
+				pythonStatus.setText(`✓ Python installed: ${pythonCheck.version || "Unknown version"}`);
+				pythonStatus.style.color = "var(--text-success)";
+			} else {
+				pythonStatus.setText("✗ Python not found. Click 'Install instructions' for help.");
+				pythonStatus.style.color = "var(--text-error)";
+			}
+
+			const ollamaCheck = await checkOllamaInstallation();
+			if (ollamaCheck.installed && ollamaCheck.running) {
+				ollamaStatus.setText(`✓ Ollama installed and running: ${ollamaCheck.version || "Unknown version"}`);
+				ollamaStatus.style.color = "var(--text-success)";
+			} else if (ollamaCheck.installed && !ollamaCheck.running) {
+				ollamaStatus.setText(`⚠ Ollama installed but not running. Click 'Start service' to start it.`);
+				ollamaStatus.style.color = "var(--text-warning)";
+			} else {
+				ollamaStatus.setText("✗ Ollama not found. Click 'Install instructions' for help.");
+				ollamaStatus.style.color = "var(--text-error)";
+			}
+		})();
+
+		// Recommended models section
+		installSection.createEl("h5", { text: "Recommended Models", cls: "ztb-subsection-title" });
+		const modelsHint = installSection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		modelsHint.setText("Download these models for optimal performance. Each model is optimized for different tasks.");
+
+		// Add each recommended model
+		for (const model of RECOMMENDED_MODELS) {
+			this.addModelDownloadSetting(installSection, model);
+		}
+	}
+
+	private addModelDownloadSetting(containerEl: HTMLElement, model: RecommendedModel): void {
+		const modelContainer = containerEl.createDiv({ cls: "ztb-model-download" });
+		const statusDiv = modelContainer.createDiv({ cls: "ztb-model-status" });
+		statusDiv.setText("Checking...");
+
+		const setting = new Setting(modelContainer)
+			.setName(model.name)
+			.setDesc(`${model.description} (${model.size})\n💡 ${model.useCase}`)
+			.addButton((button) => button
+				.setButtonText("Check")
+				.onClick(async () => {
+					button.setDisabled(true);
+					const installed = await checkModelInstalled(model.name);
+					if (installed) {
+						statusDiv.setText("✓ Installed");
+						statusDiv.style.color = "var(--text-success)";
+					} else {
+						statusDiv.setText("Not installed");
+						statusDiv.style.color = "var(--text-muted)";
+					}
+					button.setDisabled(false);
+				}))
+			.addButton((button) => button
+				.setButtonText("Download")
+				.onClick(async () => {
+					button.setDisabled(true);
+					button.setButtonText("Downloading...");
+					statusDiv.setText("Downloading... This may take several minutes.");
+					statusDiv.style.color = "var(--text-accent)";
+
+				const success = await downloadOllamaModel(model.name, (progress: string) => {
+					// Update status with progress if needed
+					statusDiv.setText(`Downloading... ${progress.trim().substring(0, 50)}`);
+				});
+
+					if (success) {
+						statusDiv.setText("✓ Downloaded successfully");
+						statusDiv.style.color = "var(--text-success)";
+						button.setButtonText("Download");
+					} else {
+						statusDiv.setText("✗ Download failed");
+						statusDiv.style.color = "var(--text-error)";
+						button.setButtonText("Retry");
+					}
+					button.setDisabled(false);
+				}));
+
+		// Auto-check on load
+		(async () => {
+			const installed = await checkModelInstalled(model.name);
+			if (installed) {
+				statusDiv.setText("✓ Installed");
+				statusDiv.style.color = "var(--text-success)";
+			} else {
+				statusDiv.setText("Not installed");
+				statusDiv.style.color = "var(--text-muted)";
+			}
+		})();
 	}
 }

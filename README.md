@@ -27,16 +27,65 @@ Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking
 
 ## 🛠️ Requirements
 
-1.  **Obsidian** (Latest version).
+1.  **Obsidian** (Latest version, desktop app).
 2.  **Ollama** running locally.
 3.  **Python 3** installed in your system PATH.
+
+## 📦 Installation & Setup
+
+### One-Click Dependency Check
+
+Zettel Thinking Board includes built-in installation helpers to get you started quickly.
+
+1.  Open **Settings → Zettel Thinking Board → Installation & Dependencies**
+2.  Use the **Check status** buttons to verify Python and Ollama installations
+3.  Click **Install instructions** for platform-specific setup guides
+4.  Use **Start service** to launch Ollama if it's installed but not running
+
+### Recommended Models
+
+The plugin recommends three optimized models for different use cases:
+
+#### 🚀 gemma3:4b (3.3 GB) - Fast & Lightweight
+*   **Best for:** Text cleaning, formatting, quick processing
+*   **Use case:** When you need speed over complexity
+*   **Download time:** ~1-2 minutes
+
+#### 💬 gemma3:27b (17 GB) - Conversation Quality
+*   **Best for:** Complex conversations, detailed responses
+*   **Use case:** When you need nuanced understanding and high-quality output
+*   **Download time:** ~5-10 minutes
+
+#### 🧠 deepseek-r1:32b (19 GB) - Logical Reasoning
+*   **Best for:** Logical breakdown, complex analysis, structured thinking
+*   **Use case:** Multi-step problem solving and analytical tasks
+*   **Download time:** ~5-10 minutes
+
+Each model has a **Check** button to verify installation and a **Download** button for one-click installation via `ollama pull`.
+
+### Manual Installation
+
+If you prefer manual setup:
+
+**Python:**
+*   macOS: `brew install python3` or download from [python.org](https://www.python.org/downloads/)
+*   Windows: Download installer from [python.org](https://www.python.org/downloads/) (check "Add to PATH")
+*   Linux: `sudo apt install python3` or your distribution's package manager
+
+**Ollama:**
+*   macOS: Download from [ollama.ai](https://ollama.ai/download) or `brew install ollama`
+*   Windows: Download installer from [ollama.ai](https://ollama.ai/download)
+*   Linux: `curl -fsSL https://ollama.ai/install.sh | sh`
+
+After installing Ollama, start it with `ollama serve` (macOS/Linux) or it will auto-start on Windows.
 
 ## 📖 Quick Start
 
 ### 1. Setup
-1.  Open the **Zettel Thinking Board** side panel (Right Ribbon).
-2.  Select your models for Orange and Purple inputs.
-3.  (Optional) Add Environment Variables (e.g., `MY_NAME` = `John`).
+1.  **Install dependencies** (see Installation & Setup above)
+2.  Open the **Zettel Thinking Board** side panel (Right Ribbon)
+3.  Select your models for Orange and Purple inputs
+4.  (Optional) Add Environment Variables (e.g., `MY_NAME` = `John`)
 
 ### 2. Create a Chain
 1.  Add an **Orange Card**: "Write a haiku about rust programming."

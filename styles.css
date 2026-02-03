@@ -435,3 +435,50 @@
 .ztb-template-banner-text {
 	white-space: nowrap;
 }
+
+/* Installation & Dependencies Section */
+.ztb-install-check {
+	margin-bottom: var(--size-4-4);
+}
+
+.ztb-install-status {
+	padding: var(--size-2-1) var(--size-4-2);
+	margin-bottom: var(--size-2-1);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+}
+
+.ztb-subsection-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	margin: var(--size-4-4) 0 var(--size-2-1);
+}
+
+.ztb-model-download {
+	margin-bottom: var(--size-4-2);
+}
+
+.ztb-model-status {
+	padding: var(--size-2-1) var(--size-4-2);
+	margin-bottom: var(--size-2-1);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	font-family: var(--font-monospace);
+}
+
+/* Spacing for multiple buttons in installation settings */
+.ztb-install-check .setting-item-control button,
+.ztb-model-download .setting-item-control button {
+	margin-left: var(--size-2-1);
+}
+
+.ztb-install-check .setting-item-control button:first-child,
+.ztb-model-download .setting-item-control button:first-child {
+	margin-left: 0;
+}
