@@ -1,13 +1,17 @@
 import type {Vault} from "obsidian";
 import {loadCanvasData} from "./nodes";
-import {getNodeRole} from "./types";
+import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
+import {getCanvasKey} from "../engine/state";
+import {getEdgeMode} from "../engine/state";
 
 const LABEL_CLASS = "ztb-node-role-label";
 const LABEL_DATA_ATTR = "data-ztb-role-label";
 const LEGEND_CLASS = "ztb-canvas-legend";
+const EDGE_MODE_LABEL_CLASS = "ztb-edge-mode-label";
+const EDGE_MODE_DATA_ATTR = "data-ztb-edge-id";
 const ROLES: NodeRole[] = ["orange", "purple", "blue", "yellow", "green"];
 
 /** Try to get a canvas node's root DOM element from the live canvas (Obsidian uses .canvas-node, no data-id). */
@@ -55,6 +59,11 @@ export function clearCanvasRoleLabels(containerEl: HTMLElement): void {
 /** Remove the canvas legend from the container. */
 export function clearCanvasLegend(containerEl: HTMLElement): void {
 	containerEl.querySelectorAll(`.${LEGEND_CLASS}`).forEach((el) => el.remove());
+}
+
+/** Remove all floating edge mode labels (injected/concatenated) from the container. */
+export function clearCanvasEdgeModeLabels(containerEl: HTMLElement): void {
+	containerEl.querySelectorAll(`.${EDGE_MODE_LABEL_CLASS}`).forEach((el) => el.remove());
 }
 
 /** Create a small color swatch for the legend (preset: resolve var or fallback; custom: hex). */
@@ -151,5 +160,55 @@ export async function syncCanvasRoleLabels(
 		const label = createLabelEl(labelText);
 		// Append after .canvas-node-container so it matches Obsidian file node label position
 		nodeEl.append(label);
+	}
+}
+
+/** Get center of an element in viewport coordinates. */
+function getElCenter(el: HTMLElement): { x: number; y: number } {
+	const r = el.getBoundingClientRect();
+	return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+/**
+ * Sync floating edge mode labels: for each edge that has a mode (inject/concatenate) in state,
+ * show a small label at the edge midpoint so the user sees the mode without it being in the editable label.
+ */
+export async function syncCanvasEdgeModeLabels(
+	vault: Vault,
+	canvasFilePath: string,
+	containerEl: HTMLElement,
+	canvas: LiveCanvas | null
+): Promise<void> {
+	clearCanvasEdgeModeLabels(containerEl);
+	const data = await loadCanvasData(vault, canvasFilePath);
+	if (!data?.edges) return;
+	const canvasKey = getCanvasKey(canvasFilePath);
+	const containerRect = containerEl.getBoundingClientRect();
+	for (const edge of data.edges) {
+		if (isOutputEdge(edge)) continue;
+		const mode = getEdgeMode(canvasKey, edge.id);
+		if (!mode) continue;
+		const fromEl =
+			(canvas && getNodeElFromCanvas(canvas, edge.fromNode)) ||
+			findNodeElementByDataId(containerEl, edge.fromNode);
+		const toEl =
+			(canvas && getNodeElFromCanvas(canvas, edge.toNode)) ||
+			findNodeElementByDataId(containerEl, edge.toNode);
+		if (!fromEl || !toEl) continue;
+		const fromCenter = getElCenter(fromEl);
+		const toCenter = getElCenter(toEl);
+		const midX = (fromCenter.x + toCenter.x) / 2 - containerRect.left + containerEl.scrollLeft;
+		const midY = (fromCenter.y + toCenter.y) / 2 - containerRect.top + containerEl.scrollTop;
+		const label = document.createElement("div");
+		label.setAttribute("class", EDGE_MODE_LABEL_CLASS);
+		label.setAttribute(EDGE_MODE_DATA_ATTR, edge.id);
+		label.textContent = mode === "inject" ? "(injected)" : "(concatenated)";
+		label.style.position = "absolute";
+		label.style.left = `${midX}px`;
+		label.style.top = `${midY}px`;
+		label.style.transform = "translate(-50%, 0)";
+		// Slight offset so it sits below the edge line / main label
+		label.style.marginTop = "4px";
+		containerEl.appendChild(label);
 	}
 }

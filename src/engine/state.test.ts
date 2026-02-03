@@ -3,6 +3,8 @@ import {
 	getCanvasKey,
 	getNodeResult,
 	setNodeResult,
+	getEdgeMode,
+	setEdgeModes,
 	clearCanvasState,
 } from "./state";
 
@@ -48,5 +50,11 @@ describe("clearCanvasState", () => {
 		setNodeResult("/c2.md", "n1", "v2");
 		clearCanvasState("/c1.md");
 		expect(getNodeResult("/c2.md", "n1")).toBe("v2");
+	});
+	it("clears edge modes for that canvas", () => {
+		setEdgeModes("/c.md", new Map([["e1", "inject"]]));
+		expect(getEdgeMode("/c.md", "e1")).toBe("inject");
+		clearCanvasState("/c.md");
+		expect(getEdgeMode("/c.md", "e1")).toBeUndefined();
 	});
 });

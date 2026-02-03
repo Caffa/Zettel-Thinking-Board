@@ -1,11 +1,23 @@
 /** Per-canvas state: NodeID -> last output result string. */
 const canvasState = new Map<string, Map<string, string>>();
 
+/** Per-canvas edge mode: EdgeID -> "inject" | "concatenate" (shown in floating label under edge). */
+const edgeModeState = new Map<string, Map<string, "inject" | "concatenate">>();
+
 function getCanvasState(canvasKey: string): Map<string, string> {
 	let map = canvasState.get(canvasKey);
 	if (!map) {
 		map = new Map();
 		canvasState.set(canvasKey, map);
+	}
+	return map;
+}
+
+function getEdgeModeState(canvasKey: string): Map<string, "inject" | "concatenate"> {
+	let map = edgeModeState.get(canvasKey);
+	if (!map) {
+		map = new Map();
+		edgeModeState.set(canvasKey, map);
 	}
 	return map;
 }
@@ -18,8 +30,18 @@ export function setNodeResult(canvasKey: string, nodeId: string, result: string)
 	getCanvasState(canvasKey).set(nodeId, result);
 }
 
+export function getEdgeMode(canvasKey: string, edgeId: string): "inject" | "concatenate" | undefined {
+	return getEdgeModeState(canvasKey).get(edgeId);
+}
+
+export function setEdgeModes(canvasKey: string, modes: Map<string, "inject" | "concatenate">): void {
+	const state = getEdgeModeState(canvasKey);
+	for (const [edgeId, mode] of modes) state.set(edgeId, mode);
+}
+
 export function clearCanvasState(canvasKey: string): void {
 	canvasState.delete(canvasKey);
+	edgeModeState.delete(canvasKey);
 }
 
 /** Canvas key = file path for the canvas file. */

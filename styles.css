@@ -130,3 +130,12 @@
 .ztb-legend-swatch--preset-4 { background-color: var(--canvas-color-4, #22c55e); }
 .ztb-legend-swatch--preset-5 { background-color: var(--canvas-color-5, #a855f7); }
 .ztb-legend-swatch--preset-6 { background-color: var(--canvas-color-6, #3b82f6); }
+
+/* Floating edge mode label (injected/concatenated) — separate from editable edge label */
+.ztb-edge-mode-label {
+	pointer-events: none;
+	z-index: 9;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	white-space: nowrap;
+}

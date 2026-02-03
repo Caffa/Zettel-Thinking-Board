@@ -2,7 +2,13 @@ import {Menu, Notice, Plugin, WorkspaceLeaf} from "obsidian";
 import {DEFAULT_SETTINGS, ZettelPluginSettings, ZettelSettingTab} from "./settings";
 import {ZettelControlsView, ZETTEL_CONTROLS_VIEW_TYPE} from "./views/ZettelControlsView";
 import {dismissOutput as runnerDismissOutput, runChain as runnerRunChain, runNode as runnerRunNode} from "./engine/runner";
-import {clearCanvasLegend, clearCanvasRoleLabels, syncCanvasRoleLabels} from "./canvas/canvasNodeLabels";
+import {
+	clearCanvasEdgeModeLabels,
+	clearCanvasLegend,
+	clearCanvasRoleLabels,
+	syncCanvasEdgeModeLabels,
+	syncCanvasRoleLabels,
+} from "./canvas/canvasNodeLabels";
 import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
 
 /** Resolve canvas node id from context-menu payload (shape may vary by Obsidian version). */
@@ -156,6 +162,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 					if (roleLabelsContainerEl != null) {
 						clearCanvasRoleLabels(roleLabelsContainerEl);
 						clearCanvasLegend(roleLabelsContainerEl);
+						clearCanvasEdgeModeLabels(roleLabelsContainerEl);
 						roleLabelsContainerEl = null;
 					}
 					return;
@@ -163,14 +170,18 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 				if (roleLabelsContainerEl != null && roleLabelsContainerEl !== view.containerEl) {
 					clearCanvasRoleLabels(roleLabelsContainerEl);
 					clearCanvasLegend(roleLabelsContainerEl);
+					clearCanvasEdgeModeLabels(roleLabelsContainerEl);
 				}
 				roleLabelsContainerEl = view.containerEl;
-				syncCanvasRoleLabels(this.app.vault, view.file.path, view.containerEl, this.settings, view.canvas as import("./engine/canvasApi").LiveCanvas);
+				const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+				syncCanvasRoleLabels(this.app.vault, view.file.path, view.containerEl, this.settings, liveCanvas);
+				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas);
 				if (roleLabelsIntervalId == null) {
 					roleLabelsIntervalId = window.setInterval(() => {
 						const v = this.getActiveCanvasView();
 						if (v != null && v.containerEl === roleLabelsContainerEl) {
 							syncCanvasRoleLabels(this.app.vault, v.file.path, v.containerEl, this.settings, v.canvas as import("./engine/canvasApi").LiveCanvas);
+							syncCanvasEdgeModeLabels(this.app.vault, v.file.path, v.containerEl, v.canvas as import("./engine/canvasApi").LiveCanvas);
 						}
 					}, 2000);
 					(this as unknown as { _roleLabelsIntervalId: number })._roleLabelsIntervalId = roleLabelsIntervalId;

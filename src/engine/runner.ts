@@ -13,11 +13,7 @@ import {
 	saveCanvasData,
 } from "../canvas/nodes";
 import type {AllCanvasNodeData, CanvasData, CanvasEdgeData, CanvasTextData} from "../canvas/types";
-import {
-	EDGE_LABEL_CONCATENATED,
-	EDGE_LABEL_INJECTED,
-	parseEdgeVariableName,
-} from "../canvas/types";
+import { parseEdgeVariableName } from "../canvas/types";
 import {isTextNode} from "../canvas/types";
 import type {LiveCanvas} from "./canvasApi";
 import {getKernelForCanvas} from "./kernelManager";
@@ -26,6 +22,7 @@ import {
 	getCanvasKey,
 	getNodeResult,
 	setNodeResult,
+	setEdgeModes,
 } from "./state";
 import type {ZettelPluginSettings} from "../settings";
 
@@ -133,7 +130,7 @@ function buildInputWithVariables(
 	};
 }
 
-/** Update edge labels to show inject vs concatenate, then refresh view (if setData) and save canvas. */
+/** Persist only base variable name in edge.label; store inject/concatenate in state for floating label. */
 async function updateEdgeLabelsAndSave(
 	vault: App["vault"],
 	canvasFilePath: string,
@@ -142,6 +139,8 @@ async function updateEdgeLabelsAndSave(
 	edgeModes: Map<string, EdgeInputMode>,
 	liveCanvas: LiveCanvas | null
 ): Promise<void> {
+	const canvasKey = getCanvasKey(canvasFilePath);
+	setEdgeModes(canvasKey, edgeModes);
 	let changed = false;
 	for (const edge of data.edges) {
 		if (edge.toNode !== nodeId) continue;
@@ -150,10 +149,9 @@ async function updateEdgeLabelsAndSave(
 		if (mode == null) continue;
 		const baseName = parseEdgeVariableName(edge.label);
 		if (baseName.length === 0) continue;
-		const newLabel =
-			mode === "inject" ? baseName + EDGE_LABEL_INJECTED : baseName + EDGE_LABEL_CONCATENATED;
-		if (edge.label !== newLabel) {
-			edge.label = newLabel;
+		// Keep only the variable name in the stored label so the user can edit it without touching (injected)/(concatenated)
+		if (edge.label !== baseName) {
+			edge.label = baseName;
 			changed = true;
 		}
 	}
