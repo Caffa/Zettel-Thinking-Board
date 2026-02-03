@@ -1,0 +1,215 @@
+{
+	"nodes": [
+		{
+			"id": "group-concat",
+			"type": "group",
+			"x": 30,
+			"y": 30,
+			"width": 720,
+			"height": 520,
+			"label": "Workflow 1: Concatenation (default)"
+		},
+		{
+			"id": "yellow-observation",
+			"type": "text",
+			"text": "Observation: Users struggle to find related notes in large vaults.",
+			"x": 50,
+			"y": 100,
+			"width": 300,
+			"height": 80,
+			"color": "3"
+		},
+		{
+			"id": "yellow-constraint",
+			"type": "text",
+			"text": "Constraint: Must work without external plugins or APIs.",
+			"x": 400,
+			"y": 100,
+			"width": 300,
+			"height": 80,
+			"color": "3"
+		},
+		{
+			"id": "orange-5whys",
+			"type": "text",
+			"text": "Apply the 5 Whys framework to analyze the root cause of the problem described above.",
+			"x": 200,
+			"y": 240,
+			"width": 350,
+			"height": 120,
+			"color": "1"
+		},
+		{
+			"id": "note-concat-explanation",
+			"type": "text",
+			"text": "💡 How it works:\n\nBoth Yellow nodes are automatically CONCATENATED (joined with \\n\\n) before being passed to the Orange node.\n\nNo edge labels needed — this is the default behavior.",
+			"x": 50,
+			"y": 400,
+			"width": 650,
+			"height": 130,
+			"color": ""
+		},
+		{
+			"id": "wf23-group-inject",
+			"type": "group",
+			"x": 880,
+			"y": 30,
+			"width": 720,
+			"height": 540,
+			"label": "Workflow 2: Variable Injection (precise placement)"
+		},
+		{
+			"id": "wf23-yellow-concept",
+			"type": "text",
+			"text": "Evergreen notes",
+			"x": 900,
+			"y": 100,
+			"width": 200,
+			"height": 60,
+			"color": "3"
+		},
+		{
+			"id": "wf23-orange-define",
+			"type": "text",
+			"text": "Define {{var:term}} in one sentence.",
+			"x": 1150,
+			"y": 100,
+			"width": 250,
+			"height": 100,
+			"color": "1"
+		},
+		{
+			"id": "wf23-purple-critique",
+			"type": "text",
+			"text": "Critique this definition:\n\n{{var:def}}\n\nProvide 2 improvements.",
+			"x": 1150,
+			"y": 260,
+			"width": 300,
+			"height": 140,
+			"color": "2"
+		},
+		{
+			"id": "wf23-note-inject-explanation",
+			"type": "text",
+			"text": "💡 How it works:\n\n1. Label the edge: 'term' (not concatenated)\n2. In Orange: {{var:term}} inserts 'Evergreen notes'\n3. Label next edge: 'def' \n4. In Purple: {{var:def}} inserts the definition\n\nWithout {{var:name}}, the input would be concatenated at the top instead.",
+			"x": 900,
+			"y": 430,
+			"width": 650,
+			"height": 120,
+			"color": ""
+		},
+		{
+			"id": "wf23-group-python",
+			"type": "group",
+			"x": 880,
+			"y": 610,
+			"width": 720,
+			"height": 520,
+			"label": "Workflow 3: Python Persistent State"
+		},
+		{
+			"id": "wf23-yellow-note1",
+			"type": "text",
+			"text": "Topic: Atomic notes",
+			"x": 900,
+			"y": 680,
+			"width": 200,
+			"height": 60,
+			"color": "3"
+		},
+		{
+			"id": "wf23-blue-store1",
+			"type": "text",
+			"text": "# Init shared state\nif 'notes' not in globals():\n    notes = []\n\nnotes.append(input)\nprint(f\"Stored: {input}\")\nobsidian_log(f\"Total notes: {len(notes)}\")",
+			"x": 900,
+			"y": 780,
+			"width": 280,
+			"height": 180,
+			"color": "6"
+		},
+		{
+			"id": "wf23-yellow-note2",
+			"type": "text",
+			"text": "Topic: Progressive summarization",
+			"x": 1250,
+			"y": 680,
+			"width": 200,
+			"height": 60,
+			"color": "3"
+		},
+		{
+			"id": "wf23-blue-store2",
+			"type": "text",
+			"text": "# Reuse state\nnotes.append(input)\nprint(f\"Stored: {input}\")\nobsidian_log(f\"Total notes: {len(notes)}\")",
+			"x": 1220,
+			"y": 780,
+			"width": 280,
+			"height": 140,
+			"color": "6"
+		},
+		{
+			"id": "wf23-blue-summarize",
+			"type": "text",
+			"text": "# Access accumulated data\nfor i, note in enumerate(notes, 1):\n    print(f\"{i}. {note}\")\n\nprint(f\"\\nCollected {len(notes)} note topics\")",
+			"x": 1030,
+			"y": 990,
+			"width": 350,
+			"height": 120,
+			"color": "6"
+		},
+		{
+			"id": "wf23-note-python-explanation",
+			"type": "text",
+			"text": "💡 How it works:\n\nPython kernel persists per canvas. Variables like 'notes' survive across runs.\n\nobsidian_log() sends to side panel (open via ribbon).",
+			"x": 900,
+			"y": 1000,
+			"width": 650,
+			"height": 110,
+			"color": ""
+		}
+	],
+	"edges": [
+		{
+			"id": "edge-obs-5whys",
+			"fromNode": "yellow-observation",
+			"toNode": "orange-5whys"
+		},
+		{
+			"id": "edge-constraint-5whys",
+			"fromNode": "yellow-constraint",
+			"toNode": "orange-5whys"
+		},
+		{
+			"id": "wf23-edge-0",
+			"fromNode": "wf23-yellow-concept",
+			"toNode": "wf23-orange-define",
+			"label": "term"
+		},
+		{
+			"id": "wf23-edge-1",
+			"fromNode": "wf23-orange-define",
+			"toNode": "wf23-purple-critique",
+			"label": "def"
+		},
+		{
+			"id": "wf23-edge-2",
+			"fromNode": "wf23-yellow-note1",
+			"toNode": "wf23-blue-store1"
+		},
+		{
+			"id": "wf23-edge-3",
+			"fromNode": "wf23-yellow-note2",
+			"toNode": "wf23-blue-store2"
+		},
+		{
+			"id": "wf23-edge-4",
+			"fromNode": "wf23-blue-store1",
+			"toNode": "wf23-blue-summarize"
+		},
+		{
+			"id": "wf23-edge-5",
+			"fromNode": "wf23-blue-store2",
+			"toNode": "wf23-blue-summarize"
+		}
+	]
+}

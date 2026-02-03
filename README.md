@@ -70,63 +70,71 @@ By default, all parent outputs are concatenated and passed to the child. You can
 
 Example: Orange → Purple with edge label `draft`. In the Purple note: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." Only the draft is injected; no extra concatenation.
 
-## 📚 Tutorials
+## 📚 Tutorial Canvas
 
-### Example 1: Multi-Source Research Brief (Basic)
+Run the command **"Create tutorial canvas"** to generate an interactive tutorial with 3 workflows:
 
-**What you'll learn:** How concatenation combines multiple inputs into unified context
+### Workflow 1: Concatenation (Default Behavior)
+
+**What you'll learn:** Multiple inputs automatically combine
 
 ```mermaid
 graph TD
-    TopicOverview[Yellow: Topic Overview] --> Summarizer[Orange: Summarize All]
-    RecentNews[Yellow: Recent News] --> Summarizer
-    ExpertOpinions[Yellow: Expert Opinions] --> Summarizer
-    Summarizer --> Output[Green: Unified Brief]
+    Observation[Yellow: Observation] --> Analysis[Orange: Apply 5 Whys]
+    Constraint[Yellow: Constraint] --> Analysis
+    Analysis --> Output[Green: Root Cause Analysis]
 ```
 
-**Use case:** "I have multiple information sources and need a synthesized summary"
-
 **How it works:**
-1. Three Yellow nodes contain different aspects of a topic (technology, news, expert opinions)
-2. All three connect to one Orange node (the summarizer)
-3. By default, all parent outputs are concatenated with `\n\n` separator
-4. The Orange node receives all three texts as context before its prompt runs
-5. Run the chain to see the unified summary in the Green output node
-
-**Try it:** Open `tutorials/example-1-multi-source-research.canvas`
+- Both Yellow nodes are **automatically concatenated** (joined with `\n\n`)
+- No edge labels needed — this is the default
+- Perfect for combining context from multiple sources
 
 ---
 
-### Example 4: Multi-Stage Data Pipeline (Advanced)
+### Workflow 2: Variable Injection (Precise Placement)
 
-**What you'll learn:** Persistent Python state, data accumulation, side-channel logging
+**What you'll learn:** Control exactly where each input appears using `{{var:name}}`
 
 ```mermaid
 graph TD
-    DatasetA[Yellow: Dataset A] --> Extract1[Blue: Parse and Store A]
-    DatasetB[Yellow: Dataset B] --> Extract2[Blue: Parse and Store B]
-    Extract1 --> Analyze[Blue: Analyze Combined Data]
-    Extract2 --> Analyze
-    Analyze --> Report[Orange: Write Insights]
-    Extract1 --> Out1[Green: Stored A]
-    Extract2 --> Out2[Green: Stored B]
-    Analyze --> Out3[Green: Statistics]
-    Report --> Out4[Green: Narrative Report]
+    Concept[Yellow: Evergreen notes] -->|term| Define[Orange: Define term]
+    Define -->|def| Critique[Purple: Critique definition]
+    Define --> Out1[Green: Definition]
+    Critique --> Out2[Green: Improvements]
 ```
 
-**Use case:** "I'm processing multiple data sources and need to aggregate before analysis"
+**How it works:**
+1. Label the edge: `term` (not `term (concatenated)` — you edit it)
+2. In the Orange node: `Define {{var:term}} in one sentence.`
+3. When run, `{{var:term}}` is replaced with "Evergreen notes"
+4. Without `{{var:name}}`, inputs would concatenate at the top instead
+
+**Use case:** Template-based prompts where you control insertion points
+
+---
+
+### Workflow 3: Python Persistent State
+
+**What you'll learn:** Variables survive across multiple node executions
+
+```mermaid
+graph TD
+    Note1[Yellow: Topic 1] --> Store1[Blue: Store in list]
+    Note2[Yellow: Topic 2] --> Store2[Blue: Store in list]
+    Store1 --> Summary[Blue: Print all notes]
+    Store2 --> Summary
+    Store1 --> Out1[Green: Stored]
+    Store2 --> Out2[Green: Stored]
+    Summary --> Out3[Green: Full List]
+```
 
 **How it works:**
-1. Two Yellow nodes contain raw datasets (sales data)
-2. Two Blue nodes parse and store data in a shared `datasets` variable
-3. **Python kernel persists state** - variables survive between node executions
-4. Third Blue node accesses accumulated data from both previous nodes
-5. Orange node generates a narrative report from the analysis
-6. `obsidian_log()` sends debug info to side panel without cluttering the canvas
+- Python kernel stays alive per canvas
+- `notes = []` in first Blue node persists for all downstream nodes
+- `obsidian_log()` sends debug info to side panel (open via ribbon)
 
-**Key concept:** The Python kernel stays alive per canvas, enabling stateful workflows where data accumulates across multiple nodes.
-
-**Try it:** Open `tutorials/example-4-data-pipeline.canvas`
+**Use case:** Accumulating data from multiple sources, counting, or stateful transformations
 
 ---
 

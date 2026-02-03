@@ -45,28 +45,50 @@ function tutorialColor(settings: ZettelPluginSettings, key: keyof ZettelPluginSe
 	return typeof v === "string" && v.trim() !== "" ? v.trim() : (DEFAULT_SETTINGS[key] as string);
 }
 
-/** X-offset for Example 4 (Data Pipeline) so it sits to the right of Example 1 (Multi-Source Research). */
-const TUTORIAL_EXAMPLE4_X_OFFSET = 1400;
-const TUTORIAL_EXAMPLE4_ID_PREFIX = "e4-";
+/** X-offset for workflows 2 & 3 so they sit to the right of workflow 1. */
+const TUTORIAL_WORKFLOWS_23_X_OFFSET = 850;
+const TUTORIAL_WORKFLOWS_23_ID_PREFIX = "wf23-";
 
-/** Build combined tutorial canvas: Example 1 (left) and Example 4 (right) side by side. */
-function getCombinedTutorialCanvasData(): CanvasData {
-	const d1 = getExample1CanvasData();
-	const d2 = getExample4CanvasData();
-	const e4Nodes = d2.nodes.map((node) => ({
+/** Map preset color number to user's actual color setting. */
+function applyColorSettings(presetColor: string | undefined, settings: ZettelPluginSettings): string {
+	// Map preset "1","2","3","4","5","6" to user's configured colors
+	const colorMap: Record<string, keyof ZettelPluginSettings> = {
+		"1": "colorOrange",  // Orange (LLM primary)
+		"2": "colorPurple",  // Purple (LLM secondary)
+		"3": "colorYellow",  // Yellow (Text input)
+		"4": "colorGreen",   // Green (Output)
+		"5": "colorRed",     // Red (LLM tertiary)
+		"6": "colorBlue",    // Blue (Python)
+	};
+	if (!presetColor || !colorMap[presetColor]) return presetColor || "";
+	return tutorialColor(settings, colorMap[presetColor]);
+}
+
+/** Build combined tutorial canvas: 3 workflows showcasing concatenation, variable injection, and Python state. */
+function getCombinedTutorialCanvasData(settings: ZettelPluginSettings): CanvasData {
+	const wf1 = getExample1CanvasData();
+	const wf23 = getExample4CanvasData();
+	const wf23Nodes = wf23.nodes.map((node) => ({
 		...node,
-		id: TUTORIAL_EXAMPLE4_ID_PREFIX + node.id,
-		x: (node as { x: number }).x + TUTORIAL_EXAMPLE4_X_OFFSET,
+		id: TUTORIAL_WORKFLOWS_23_ID_PREFIX + node.id,
+		x: (node as { x: number }).x + TUTORIAL_WORKFLOWS_23_X_OFFSET,
+		color: applyColorSettings(node.color, settings),
 	}));
-	const e4Edges = d2.edges.map((edge, i) => ({
+	const wf23Edges = wf23.edges.map((edge, i) => ({
 		...edge,
-		id: `${TUTORIAL_EXAMPLE4_ID_PREFIX}edge-${i}`,
-		fromNode: TUTORIAL_EXAMPLE4_ID_PREFIX + edge.fromNode,
-		toNode: TUTORIAL_EXAMPLE4_ID_PREFIX + edge.toNode,
+		id: `${TUTORIAL_WORKFLOWS_23_ID_PREFIX}edge-${i}`,
+		fromNode: TUTORIAL_WORKFLOWS_23_ID_PREFIX + edge.fromNode,
+		toNode: TUTORIAL_WORKFLOWS_23_ID_PREFIX + edge.toNode,
+		label: edge.label,
+	}));
+	// Apply color settings to workflow 1 as well
+	const wf1NodesWithColors = wf1.nodes.map((node) => ({
+		...node,
+		color: applyColorSettings(node.color, settings),
 	}));
 	return {
-		nodes: [...d1.nodes, ...e4Nodes],
-		edges: [...d1.edges, ...e4Edges],
+		nodes: [...wf1NodesWithColors, ...wf23Nodes],
+		edges: [...wf1.edges, ...wf23Edges],
 	};
 }
 
@@ -567,7 +589,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			n += 1;
 			path = normalizePath(`${baseName} ${n}.canvas`);
 		}
-		const data = getCombinedTutorialCanvasData();
+		const data = getCombinedTutorialCanvasData(this.settings);
 		const saved = await saveCanvasData(vault, path, data);
 		if (!saved) {
 			new Notice("Could not create tutorial canvas.");
@@ -579,7 +601,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		} else {
 			await workspace.openLinkText(path, "", false);
 		}
-		new Notice("Tutorial canvas created. Left: Multi-Source Research (concatenation). Right: Data Pipeline (Python state). Right-click a node → Run node or Run chain.");
+		new Notice("Tutorial canvas created. 3 workflows: Concatenation | Variable Injection | Python State. Right-click any colored node → Run node or Run chain.");
 	}
 
 	/** Returns the active canvas view if the active leaf is a canvas. */
