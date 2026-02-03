@@ -19,7 +19,7 @@ Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking
     *   🟪 **Purple:** Secondary LLM (e.g., Mistral - great for critiquing Orange).
     *   🟦 **Blue:** Python Code (Persistent State).
     *   🟩 **Green:** Auto-generated output (Visual Sidecar).
-    *   🟨 **Yellow:** Comments / Static Context.
+    *   🟨 **Yellow:** Text (input pass-through). Uncolored or unused-color nodes are not connected and do not add to the prompt.
 *   **Persistent Memory:** Variables defined in one Blue node are accessible in connected Blue nodes downstream.
 *   **Edge variable injection:** Put a **variable name** on an edge (edit the edge label). In the target note, use `{{var:variableName}}` to inject that parent's output at that spot instead of concatenating it. Edges update after run to show "(injected)" or "(concatenated)". The label **`output`** is reserved for the run node → green output note and is not a variable name; Run Node / Run Chain ignore output edges.
 *   **Side Channel Logging:** Send debug info to the side panel console without cluttering your canvas.
@@ -76,7 +76,7 @@ The plugin settings are organized so that each **model** (primary, secondary, te
 
 - **Group by concept:** For each model you set the Ollama model, optional canvas label, and node color in a single collapsible block—no jumping between "Execution" and "Node colors."
 - **Progressive disclosure:** The primary model block is expanded by default; secondary and tertiary can stay collapsed. The block summary shows the current choice (e.g. "Primary model — llama2") so you can scan without opening.
-- **Execution first, then display:** Settings are ordered as: what runs (models + Python path), then how it looks (colors for Python / Comment / Output nodes and the "Show role labels" toggle).
+- **Execution first, then display:** Settings are ordered as: what runs (models + Python path), then how it looks (colors for Python / Text / Output nodes and the "Show role labels" toggle).
 - **One-to-one colors:** Each node type should have a unique color. If you assign a color that another type already uses, an alert reminds you so the canvas stays easy to read.
 
 ## ⚙️ Advanced: Python State

@@ -13,14 +13,14 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 	red: "Model (tertiary)",
 
 	blue: "Python",
-	yellow: "Comment",
+	yellow: "Text",
 	green: "Output",
 };
 
 /** Model roles that use an Ollama model and support an optional custom label. */
 const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red"];
 
-/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary, then Python, Comment, Output. */
+/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary, then Python, Text, Output. */
 export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "blue", "yellow", "green"];
 
 /** Human-readable names for conflict alerts (one-to-one color mapping). */
@@ -29,7 +29,7 @@ const ROLE_DISPLAY_NAMES: Record<NodeRole, string> = {
 	purple: "Secondary model",
 	red: "Tertiary model",
 	blue: "Python node",
-	yellow: "Comment node",
+	yellow: "Text node",
 	green: "Output node",
 };
 
@@ -419,7 +419,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 		const displaySection = containerEl.createDiv({ cls: "ztb-settings-section" });
 		displaySection.createEl("h4", { text: "Display", cls: "ztb-section-title" });
 		const displayHint = displaySection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
-		displayHint.setText("Each node type should have a unique color so nodes are easy to tell apart on the canvas. Choosing a color already used by another type will show an alert.");
+		displayHint.setText("Each node type should have a unique color. Uncolored or unused-color nodes are not part of the execution graph and do not add to any prompt.");
 		addColorSetting(
 			displaySection,
 			this.plugin,
@@ -431,8 +431,8 @@ export class ZettelSettingTab extends PluginSettingTab {
 			displaySection,
 			this.plugin,
 			"yellow",
-			"Comment node",
-			"Color for the comment (pass-through) node on the canvas"
+			"Text node",
+			"Color for the text (input) node: pass-through input text, no AI. Uncolored or unused-color nodes are not connected and do not add to any prompt."
 		);
 		addColorSetting(
 			displaySection,
@@ -444,7 +444,7 @@ export class ZettelSettingTab extends PluginSettingTab {
 
 		new Setting(displaySection)
 			.setName("Show role labels on canvas")
-			.setDesc("Show a floating label above each node (e.g. Comment, Python) based on its color")
+			.setDesc("Show a floating label above each node (e.g. Text, Python) based on its color")
 			.addToggle((toggle) => toggle
 				.setValue(s.showNodeRoleLabels)
 				.onChange(async (value) => {

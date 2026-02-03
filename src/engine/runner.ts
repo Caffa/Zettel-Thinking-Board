@@ -30,7 +30,7 @@ import {DEFAULT_SETTINGS, type NodeRole, type ZettelPluginSettings} from "../set
 
 type EdgeInputMode = "inject" | "concatenate";
 
-/** True if the role is non-AI (Python or pass-through); prefer running these first for early output. */
+/** True if the role is non-AI (Python or text pass-through); prefer running these first for early output. */
 function isNonAIRole(role: NodeRole | null): boolean {
 	return role === "blue" || role === "yellow";
 }
@@ -135,7 +135,7 @@ function topologicalSort(
 	return { order };
 }
 
-/** Sort ready queue: non-AI (Python, yellow) first for early output, then by y. */
+/** Sort ready queue: non-AI (Python, text) first for early output, then by y. */
 function sortQueueByNonAIFirst(
 	queue: string[],
 	data: CanvasData,
@@ -236,7 +236,7 @@ async function runSingleNode(
 	if (!node) return "";
 	const role = getNodeRole(node, settings);
 	if (!role || role === "yellow" || role === "green") {
-		// Yellow: pass-through (use node content as result)
+		// Yellow = text (input pass-through): use node content as result
 		if (role === "yellow") {
 			const content = await getNodeContent(node, app.vault);
 			setNodeResult(canvasKey, nodeId, content);

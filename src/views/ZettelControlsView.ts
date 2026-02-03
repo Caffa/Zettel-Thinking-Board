@@ -195,6 +195,7 @@ export class ZettelControlsView extends ItemView {
 		const guideList = guideDetails.createEl("ul", { cls: "ztb-guide-list" });
 		const tips = [
 			"Each color is a different way to work with text: one color might ask an AI a question, another might run a short Python snippet, and the green card is where the result shows up.",
+			"Text (yellow) nodes are input pass-through: their content is sent to the next node. Uncolored or unused-color cards are not connected and do not add to any prompt.",
 			"An arrow from one card to another sends its text as input. You can change how it's combined by clicking the arrow's label.",
 			"Right-click a card and choose Run node to run just that card, or Run chain to run it and every card that feeds into it.",
 			"The green card is where answers and results appear. It gets created or updated when you run an AI or Python card.",

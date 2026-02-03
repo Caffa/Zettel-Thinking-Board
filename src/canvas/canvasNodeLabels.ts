@@ -86,7 +86,7 @@ function createLegendSwatch(color: CanvasColor): HTMLElement {
 	return swatch;
 }
 
-/** Build and append the legend to the canvas container (vanilla DOM, no innerHTML). Order: primary → tertiary, then Python, Comment, Output. */
+/** Build and append the legend to the canvas container (vanilla DOM, no innerHTML). Order: primary → tertiary, then Python, Text, Output. */
 function syncCanvasLegend(containerEl: HTMLElement, settings: ZettelPluginSettings): void {
 	clearCanvasLegend(containerEl);
 	if (!settings.showNodeRoleLabels) return;
@@ -116,7 +116,7 @@ function syncCanvasLegend(containerEl: HTMLElement, settings: ZettelPluginSettin
 	otherRow.appendChild(otherSwatch);
 	const otherText = document.createElement("span");
 	otherText.setAttribute("class", "ztb-legend-text");
-	otherText.textContent = "Other colors = Comment";
+	otherText.textContent = "Uncolored / unused color = not connected; does not add to prompt.";
 	otherRow.appendChild(otherText);
 	legend.appendChild(otherRow);
 	containerEl.appendChild(legend);
@@ -133,7 +133,7 @@ function createLabelEl(text: string): HTMLElement {
 
 /**
  * Sync floating role labels for the active canvas: for each node whose color maps to a role,
- * add a small label above the node (e.g. "Comment", "Python"). Removes existing labels first.
+ * add a small label above the node (e.g. "Text", "Python"). Removes existing labels first.
  * Uses the live canvas node map to find each node's DOM element (.canvas-node).
  * @param isStillActive - if provided, called after async load; when false we skip applying to avoid stale canvas
  */

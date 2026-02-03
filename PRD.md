@@ -22,9 +22,9 @@ The plugin parses colors to determine behavior.
 *   **Blue Node (Python):** Executes code.
     *   *Input:* `input` variable contains the result string from the parent node.
     *   *State:* Access to shared global variables from previous Blue nodes.
-*   **Yellow Node (Comment/Pass-through):**
+*   **Yellow Node (Text / input):**
     *   No execution.
-    *   Passes its text context to the next node (useful for static instructions or delimiters).
+    *   Passes its text as input to the next node (pass-through). Uncolored or unused-color nodes are not connected to any node and do not add to the prompt.
 *   **Green Node (Visual Output):**
     *   **Behavior:** Generated automatically upon successful execution of an Orange, Purple, or Blue node. Re-running the source node **replaces** the green note's content (no duplicate output notes).
     *   **Placement:** Spawned immediately *below* the source node (Coords: $X_{parent}, Y_{parent} + Height_{parent} + Padding$).
