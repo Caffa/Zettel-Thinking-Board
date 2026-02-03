@@ -21,6 +21,7 @@ Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking
     *   🟩 **Green:** Auto-generated output (Visual Sidecar).
     *   🟨 **Yellow:** Comments / Static Context.
 *   **Persistent Memory:** Variables defined in one Blue node are accessible in connected Blue nodes downstream.
+*   **Edge variable injection:** Put a **variable name** on an edge (edit the edge label). In the target note, use `{{var:variableName}}` to inject that parent's output at that spot instead of concatenating it. Edges update after run to show "(injected)" or "(concatenated)".
 *   **Side Channel Logging:** Send debug info to the side panel console without cluttering your canvas.
 *   **Recursive Execution:** "Run Chain" automatically traces back to the start and runs the entire flow to ensure context is fresh.
 
@@ -58,6 +59,17 @@ Unlike other canvas tools where the output sits *between* nodes, Zettel Thinking
     3.  The Blue card runs. A Green note appears below it saying "Haiku has 3 lines".
     4.  "Analyzing structure..." appears in your Side Panel Console.
 
+## 🔗 Edge variable injection
+
+By default, all parent outputs are concatenated and passed to the child. You can instead **inject** a parent's output at a specific place in the child note.
+
+1. **Name the edge:** Select the edge (line) from parent to child and set its **label** to a variable name (e.g. `summary`).
+2. **Use the placeholder:** In the child note, write `{{var:summary}}` where you want the parent's output to appear.
+3. **Run:** When you run the node or chain, `{{var:summary}}` is replaced by that parent's output, and that parent is **not** concatenated. Other parents (or the same parent if you don't use the variable) are still concatenated as before.
+4. **Edge labels after run:** The edge label is updated to `summary (injected)` or `summary (concatenated)` so you can see how each edge was used.
+
+Example: Orange → Purple with edge label `draft`. In the Purple note: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." Only the draft is injected; no extra concatenation.
+
 ## ⚙️ Advanced: Python State
 The Python kernel stays alive as long as Obsidian is open (or until you click "Restart Kernel").
 
@@ -72,6 +84,13 @@ memory.append(input)
 obsidian_log(f"Memory size: {len(memory)}")
 ```
 This allows you to build complex data accumulation workflows.
+
+## Development
+
+*   **Install:** `npm install` (use `npm install --legacy-peer-deps` if needed for Vitest).
+*   **Build:** `npm run build`
+*   **Tests:** `npm run test` (unit tests with Vitest). `npm run test:watch` for watch mode.
+*   **Deploy to a test vault:** Run `npm run deploy-to-vault` to build and copy `main.js`, `manifest.json`, and `styles.css` into the `zettel-thinking-board/` folder. Copy that folder into your vault at `.obsidian/plugins/zettel-thinking-board/`, then reload the plugin in Obsidian. Alternatively, use the provided `sendToNovelVault.sh` script (edit the path inside it to point at your vault) to build and copy in one step.
 
 ## ⚠️ Security Warning
 This plugin allows the execution of **arbitrary Python code** on your machine via the Canvas.
