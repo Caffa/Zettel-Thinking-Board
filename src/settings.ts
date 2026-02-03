@@ -4,10 +4,11 @@ import {fetchOllamaModels} from "./engine/ollama";
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
 
-export type NodeRole = "orange" | "purple" | "blue" | "yellow" | "green";
+export type NodeRole = "red" | "orange" | "purple" | "blue" | "yellow" | "green";
 
 /** Default label for each role when no model name is set. */
 export const ROLE_LABELS: Record<NodeRole, string> = {
+	red: "Model (tertiary)",
 	orange: "Model (primary)",
 	purple: "Model (secondary)",
 	blue: "Python",
@@ -15,15 +16,32 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 	green: "Output",
 };
 
-/** Display label for the canvas: uses model name for primary/secondary (e.g. "Model: Deepseek 32b"). */
+/** Model roles that use an Ollama model and support an optional custom label. */
+const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red"];
+
+function getModelName(role: NodeRole, settings: ZettelPluginSettings): string {
+	if (role === "orange") return (settings.ollamaOrangeModel || "").trim();
+	if (role === "purple") return (settings.ollamaPurpleModel || "").trim();
+	if (role === "red") return (settings.ollamaRedModel || "").trim();
+	return "";
+}
+
+function getModelLabel(role: NodeRole, settings: ZettelPluginSettings): string {
+	if (role === "orange") return (settings.modelLabelOrange || "").trim();
+	if (role === "purple") return (settings.modelLabelPurple || "").trim();
+	if (role === "red") return (settings.modelLabelRed || "").trim();
+	return "";
+}
+
+/** Display label for the canvas: uses model name for model roles; optional custom label is prepended (e.g. "quick: llama2"). */
 export function getRoleLabel(role: NodeRole, settings: ZettelPluginSettings): string {
-	if (role === "orange") {
-		const name = (settings.ollamaOrangeModel || "").trim();
-		return name ? `Model: ${name}` : ROLE_LABELS.orange;
-	}
-	if (role === "purple") {
-		const name = (settings.ollamaPurpleModel || "").trim();
-		return name ? `Model: ${name}` : ROLE_LABELS.purple;
+	if (MODEL_ROLES.includes(role)) {
+		const name = getModelName(role, settings);
+		const customLabel = getModelLabel(role, settings);
+		if (name) {
+			return customLabel ? `${customLabel}: ${name}` : `Model: ${name}`;
+		}
+		return customLabel ? `${customLabel}: (no model)` : ROLE_LABELS[role];
 	}
 	return ROLE_LABELS[role];
 }
@@ -31,6 +49,11 @@ export function getRoleLabel(role: NodeRole, settings: ZettelPluginSettings): st
 export interface ZettelPluginSettings {
 	ollamaOrangeModel: string;
 	ollamaPurpleModel: string;
+	ollamaRedModel: string;
+	modelLabelOrange: string;
+	modelLabelPurple: string;
+	modelLabelRed: string;
+	colorRed: CanvasColor;
 	colorOrange: CanvasColor;
 	colorPurple: CanvasColor;
 	colorBlue: CanvasColor;
@@ -43,6 +66,11 @@ export interface ZettelPluginSettings {
 export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	ollamaOrangeModel: "",
 	ollamaPurpleModel: "",
+	ollamaRedModel: "",
+	modelLabelOrange: "",
+	modelLabelPurple: "",
+	modelLabelRed: "",
+	colorRed: "5",
 	colorOrange: "1",
 	colorPurple: "2",
 	colorBlue: "6",
@@ -62,13 +90,26 @@ const PRESET_HEX: Record<string, string> = {
 	"6": "#3b82f6",
 };
 
-/** Resolve preset color: use --canvas-color-N when valid, else fallback hex. */
+/** Normalize Advanced Canvas / Obsidian format: "r, g, b" -> "rgb(r,g,b)". */
+function normalizeCanvasColorValue(value: string): string {
+	const trimmed = value.trim();
+	// Advanced Canvas uses --canvas-color-X: r, g, b (RGB triplets on body)
+	if (/^\d+\s*,\s*\d+\s*,\s*\d+\s*$/.test(trimmed)) return `rgb(${trimmed})`;
+	return trimmed;
+}
+
+/**
+ * Resolve preset color: read --canvas-color-N from body (Advanced Canvas) then documentElement (Obsidian), else fallback hex.
+ * Supports Advanced Canvas custom colors: https://github.com/Developer-Mike/obsidian-advanced-canvas#custom-colors
+ */
 export function getPresetColor(presetNumber: 1 | 2 | 3 | 4 | 5 | 6): string {
 	const n = Math.max(1, Math.min(6, presetNumber));
-	const value = getComputedStyle(document.documentElement)
-		.getPropertyValue(`--canvas-color-${n}`)
-		.trim();
-	if (value && /^(#[0-9A-Fa-f]{3,8}|rgb|rgba|hsl|hsla)/.test(value)) return value;
+	const varName = `--canvas-color-${n}`;
+	// Prefer body so Advanced Canvas custom colors (set on body) are used when present
+	const fromBody = getComputedStyle(document.body).getPropertyValue(varName).trim();
+	const fromRoot = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+	const value = normalizeCanvasColorValue(fromBody || fromRoot);
+	if (value && /^(#[0-9A-Fa-f]{3,8}|rgb\(|rgba\(|hsl\(|hsla\()/.test(value)) return value;
 	return PRESET_HEX[String(n)] ?? "#888";
 }
 
@@ -213,6 +254,16 @@ export class ZettelSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						}));
 				new Setting(ollamaContainer)
+					.setName("Label (primary)")
+					.setDesc("Optional label prepended on canvas (e.g. quick, big); model name is shown after it")
+					.addText((text) => text
+						.setPlaceholder("e.g. quick")
+						.setValue(s.modelLabelOrange)
+						.onChange(async (value) => {
+							this.plugin.settings.modelLabelOrange = value;
+							await this.plugin.saveSettings();
+						}));
+				new Setting(ollamaContainer)
 					.setName("Model node (secondary)")
 					.setDesc("Ollama model used when you run a secondary model node")
 					.addText((text) => text
@@ -220,6 +271,36 @@ export class ZettelSettingTab extends PluginSettingTab {
 						.setValue(s.ollamaPurpleModel)
 						.onChange(async (value) => {
 							s.ollamaPurpleModel = value;
+							await this.plugin.saveSettings();
+						}));
+				new Setting(ollamaContainer)
+					.setName("Label (secondary)")
+					.setDesc("Optional label prepended on canvas (e.g. quick, big)")
+					.addText((text) => text
+						.setPlaceholder("e.g. big")
+						.setValue(s.modelLabelPurple)
+						.onChange(async (value) => {
+							this.plugin.settings.modelLabelPurple = value;
+							await this.plugin.saveSettings();
+						}));
+				new Setting(ollamaContainer)
+					.setName("Model node (tertiary)")
+					.setDesc("Ollama model used when you run a tertiary model node")
+					.addText((text) => text
+						.setPlaceholder("e.g. phi")
+						.setValue(s.ollamaRedModel)
+						.onChange(async (value) => {
+							this.plugin.settings.ollamaRedModel = value;
+							await this.plugin.saveSettings();
+						}));
+				new Setting(ollamaContainer)
+					.setName("Label (tertiary)")
+					.setDesc("Optional label prepended on canvas (e.g. quick, big)")
+					.addText((text) => text
+						.setPlaceholder("e.g. tiny")
+						.setValue(s.modelLabelRed)
+						.onChange(async (value) => {
+							this.plugin.settings.modelLabelRed = value;
 							await this.plugin.saveSettings();
 						}));
 				return;
@@ -237,6 +318,16 @@ export class ZettelSettingTab extends PluginSettingTab {
 					});
 				});
 			new Setting(ollamaContainer)
+				.setName("Label (primary)")
+				.setDesc("Optional label prepended on canvas (e.g. quick, big); model name is shown after it")
+				.addText((text) => text
+					.setPlaceholder("e.g. quick")
+					.setValue(s.modelLabelOrange)
+					.onChange(async (value) => {
+						this.plugin.settings.modelLabelOrange = value;
+						await this.plugin.saveSettings();
+					}));
+			new Setting(ollamaContainer)
 				.setName("Model node (secondary)")
 				.setDesc("Ollama model used when you run a secondary model node")
 				.addDropdown((dropdown) => {
@@ -248,6 +339,38 @@ export class ZettelSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 				});
+			new Setting(ollamaContainer)
+				.setName("Label (secondary)")
+				.setDesc("Optional label prepended on canvas (e.g. quick, big)")
+				.addText((text) => text
+					.setPlaceholder("e.g. big")
+					.setValue(s.modelLabelPurple)
+					.onChange(async (value) => {
+						this.plugin.settings.modelLabelPurple = value;
+						await this.plugin.saveSettings();
+					}));
+			new Setting(ollamaContainer)
+				.setName("Model node (tertiary)")
+				.setDesc("Ollama model used when you run a tertiary model node")
+				.addDropdown((dropdown) => {
+					dropdown.addOption("", "— Select model —");
+					for (const name of models) dropdown.addOption(name, name);
+					dropdown.setValue(s.ollamaRedModel && models.includes(s.ollamaRedModel) ? s.ollamaRedModel : "");
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.ollamaRedModel = value;
+						await this.plugin.saveSettings();
+					});
+				});
+			new Setting(ollamaContainer)
+				.setName("Label (tertiary)")
+				.setDesc("Optional label prepended on canvas (e.g. quick, big)")
+				.addText((text) => text
+					.setPlaceholder("e.g. tiny")
+					.setValue(s.modelLabelRed)
+					.onChange(async (value) => {
+						this.plugin.settings.modelLabelRed = value;
+						await this.plugin.saveSettings();
+					}));
 		})();
 
 		new Setting(executionSection)
@@ -264,6 +387,13 @@ export class ZettelSettingTab extends PluginSettingTab {
 		// Node colors: how it looks (role-first labels, effect-focused descriptions)
 		const colorsSection = containerEl.createDiv({ cls: "ztb-settings-section" });
 		colorsSection.createEl("h4", { text: "Node colors", cls: "ztb-section-title" });
+		addColorSetting(
+			colorsSection,
+			this.plugin,
+			"red",
+			"Model node (tertiary)",
+			"Color for the tertiary model node on the canvas"
+		);
 		addColorSetting(
 			colorsSection,
 			this.plugin,

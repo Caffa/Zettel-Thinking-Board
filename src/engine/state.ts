@@ -4,6 +4,9 @@ const canvasState = new Map<string, Map<string, string>>();
 /** Per-canvas edge mode: EdgeID -> "inject" | "concatenate" (shown in floating label under edge). */
 const edgeModeState = new Map<string, Map<string, "inject" | "concatenate">>();
 
+/** Node currently running (waiting for AI/kernel) per canvas; used to show "running" on incoming edges. */
+const runningNodeState = new Map<string, string | null>();
+
 function getCanvasState(canvasKey: string): Map<string, string> {
 	let map = canvasState.get(canvasKey);
 	if (!map) {
@@ -39,9 +42,19 @@ export function setEdgeModes(canvasKey: string, modes: Map<string, "inject" | "c
 	for (const [edgeId, mode] of modes) state.set(edgeId, mode);
 }
 
+export function getRunningNodeId(canvasKey: string): string | null {
+	return runningNodeState.get(canvasKey) ?? null;
+}
+
+export function setRunningNodeId(canvasKey: string, nodeId: string | null): void {
+	if (nodeId == null) runningNodeState.delete(canvasKey);
+	else runningNodeState.set(canvasKey, nodeId);
+}
+
 export function clearCanvasState(canvasKey: string): void {
 	canvasState.delete(canvasKey);
 	edgeModeState.delete(canvasKey);
+	runningNodeState.delete(canvasKey);
 }
 
 /** Canvas key = file path for the canvas file. */

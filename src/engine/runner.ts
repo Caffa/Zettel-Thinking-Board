@@ -23,10 +23,16 @@ import {
 	getNodeResult,
 	setNodeResult,
 	setEdgeModes,
+	setRunningNodeId,
 } from "./state";
-import type {ZettelPluginSettings} from "../settings";
+import type {NodeRole, ZettelPluginSettings} from "../settings";
 
 type EdgeInputMode = "inject" | "concatenate";
+
+/** True if the role is non-AI (Python or pass-through); prefer running these first for early output. */
+function isNonAIRole(role: NodeRole | null): boolean {
+	return role === "blue" || role === "yellow";
+}
 
 /** Get all root node ids (no incoming non-output edges). */
 function getRootIds(data: CanvasData): string[] {
@@ -53,7 +59,11 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 }
 
 /** Topological order of node ids (only nodes that are ancestors of target; ignores output edges). */
-function topologicalOrderToTarget(data: CanvasData, targetId: string): string[] {
+function topologicalOrderToTarget(
+	data: CanvasData,
+	targetId: string,
+	settings: ZettelPluginSettings
+): string[] {
 	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
 	const nodeIds = new Set<string>();
 	const stack = [targetId];
@@ -65,6 +75,34 @@ function topologicalOrderToTarget(data: CanvasData, targetId: string): string[] 
 			if (e.toNode === id) stack.push(e.fromNode);
 		}
 	}
+	return topologicalSort(data, execEdges, nodeIds, settings);
+}
+
+/** Topological order of all nodes reachable from any root (ignores output edges). */
+function topologicalOrderFull(data: CanvasData, settings: ZettelPluginSettings): string[] {
+	const roots = getRootIds(data);
+	const execEdges = data.edges.filter((e) => !isOutputEdge(e));
+	const nodeIds = new Set<string>();
+	for (const rootId of roots) {
+		const stack = [rootId];
+		while (stack.length > 0) {
+			const id = stack.pop()!;
+			if (nodeIds.has(id)) continue;
+			nodeIds.add(id);
+			for (const e of execEdges) {
+				if (e.fromNode === id) stack.push(e.toNode);
+			}
+		}
+	}
+	return topologicalSort(data, execEdges, nodeIds, settings);
+}
+
+function topologicalSort(
+	data: CanvasData,
+	execEdges: CanvasEdgeData[],
+	nodeIds: Set<string>,
+	settings: ZettelPluginSettings
+): string[] {
 	const inDegree = new Map<string, number>();
 	for (const id of nodeIds) inDegree.set(id, 0);
 	for (const e of execEdges) {
@@ -73,11 +111,8 @@ function topologicalOrderToTarget(data: CanvasData, targetId: string): string[] 
 		}
 	}
 	const order: string[] = [];
-	const queue = [...nodeIds].filter((id) => inDegree.get(id) === 0).sort((a, b) => {
-		const na = getNodeById(data, a);
-		const nb = getNodeById(data, b);
-		return (na?.y ?? 0) - (nb?.y ?? 0);
-	});
+	const queue = [...nodeIds].filter((id) => inDegree.get(id) === 0);
+	sortQueueByNonAIFirst(queue, data, settings);
 	while (queue.length > 0) {
 		const id = queue.shift()!;
 		order.push(id);
@@ -88,8 +123,27 @@ function topologicalOrderToTarget(data: CanvasData, targetId: string): string[] 
 				if (d === 0) queue.push(e.toNode);
 			}
 		}
+		sortQueueByNonAIFirst(queue, data, settings);
 	}
 	return order;
+}
+
+/** Sort ready queue: non-AI (Python, yellow) first for early output, then by y. */
+function sortQueueByNonAIFirst(
+	queue: string[],
+	data: CanvasData,
+	settings: ZettelPluginSettings
+): void {
+	queue.sort((a, b) => {
+		const na = getNodeById(data, a);
+		const nb = getNodeById(data, b);
+		const roleA = getNodeRole(na ?? { color: undefined }, settings);
+		const roleB = getNodeRole(nb ?? { color: undefined }, settings);
+		const nonA = isNonAIRole(roleA) ? 0 : 1;
+		const nonB = isNonAIRole(roleB) ? 0 : 1;
+		if (nonA !== nonB) return nonA - nonB;
+		return (na?.y ?? 0) - (nb?.y ?? 0);
+	});
 }
 
 /** Build concatenated context, template with {{var:name}} substituted, and per-edge mode. */
@@ -208,6 +262,14 @@ async function runSingleNode(
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
 		return result;
 	}
+	if (role === "red") {
+		const model = settings.ollamaRedModel || "llama2";
+		const result = await ollamaGenerate({ model, prompt: fullPrompt, stream: false });
+		setNodeResult(canvasKey, nodeId, result);
+		ensureOutputNodeAndEdge(data, node, result, settings);
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
+		return result;
+	}
 	if (role === "blue") {
 		const kernel = getKernelForCanvas(canvasKey, settings.pythonPath);
 		const result = await kernel.run(template, concatenatedPart);
@@ -217,6 +279,56 @@ async function runSingleNode(
 		return result;
 	}
 	return "";
+}
+
+/** Max horizontal offset (px) for output box collision avoidance; beyond this we allow overlap. */
+const OUTPUT_COLLISION_MAX_RADIUS = 500;
+/** Step (px) between candidate x positions when avoiding collisions. */
+const OUTPUT_COLLISION_STEP = 80;
+
+function rectanglesOverlap(
+	a: { x: number; y: number; width: number; height: number },
+	b: { x: number; y: number; width: number; height: number }
+): boolean {
+	return !(
+		a.x + a.width <= b.x ||
+		b.x + b.width <= a.x ||
+		a.y + a.height <= b.y ||
+		b.y + b.height <= a.y
+	);
+}
+
+/** Choose an x for the output box to avoid overlapping other nodes; tries defaultX then right then left within maxRadius. */
+function chooseOutputPosition(
+	data: CanvasData,
+	sourceNodeId: string,
+	outNodeId: string | null,
+	defaultX: number,
+	y: number,
+	width: number,
+	height: number,
+	maxRadius: number,
+	step: number
+): number {
+	const excludeIds = new Set<string>([sourceNodeId]);
+	if (outNodeId) excludeIds.add(outNodeId);
+	const box = { x: 0, y, width, height };
+	function tryX(x: number): boolean {
+		box.x = x;
+		for (const node of data.nodes) {
+			if (excludeIds.has(node.id)) continue;
+			if (rectanglesOverlap(box, { x: node.x, y: node.y, width: node.width, height: node.height })) {
+				return false;
+			}
+		}
+		return true;
+	}
+	if (tryX(defaultX)) return defaultX;
+	for (let offset = step; offset <= maxRadius; offset += step) {
+		if (tryX(defaultX + offset)) return defaultX + offset;
+		if (tryX(defaultX - offset)) return defaultX - offset;
+	}
+	return defaultX;
 }
 
 /** Generate a unique id for new canvas nodes/edges. */
@@ -235,16 +347,39 @@ function ensureOutputNodeAndEdge(
 	settings: ZettelPluginSettings
 ): void {
 	const outId = findOutputNodeForSource(data, sourceNode.id, settings);
-	const x = sourceNode.x;
 	const y = sourceNode.y + sourceNode.height + GREEN_NODE_PADDING;
-	const width = Math.max(200, sourceNode.width);
-	const height = 100;
+	const width = Math.max(320, sourceNode.width);
+	const height = 180;
+	const defaultX = sourceNode.x;
+	const chosenX = chooseOutputPosition(
+		data,
+		sourceNode.id,
+		outId,
+		defaultX,
+		y,
+		width,
+		height,
+		OUTPUT_COLLISION_MAX_RADIUS,
+		OUTPUT_COLLISION_STEP
+	);
 	const greenColor = settings.colorGreen;
 
 	if (outId) {
 		const outNode = getNodeById(data, outId);
 		if (outNode && isTextNode(outNode)) {
-			(outNode as CanvasTextData).text = text;
+			const updated = {
+				...(outNode as CanvasTextData),
+				text,
+				x: chosenX,
+				y,
+				width,
+				height,
+			};
+			const idx = data.nodes.findIndex((n) => n.id === outId);
+			if (idx >= 0) data.nodes[idx] = updated;
+		} else if (outNode) {
+			(outNode as { x: number; y: number }).x = chosenX;
+			(outNode as { x: number; y: number }).y = y;
 		}
 		const hasOutputEdge = data.edges.some(
 			(e) => e.fromNode === sourceNode.id && e.toNode === outId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT
@@ -265,7 +400,7 @@ function ensureOutputNodeAndEdge(
 		id: newNodeId,
 		type: "text",
 		text,
-		x,
+		x: chosenX,
 		y,
 		width,
 		height,
@@ -280,7 +415,7 @@ function ensureOutputNodeAndEdge(
 	});
 }
 
-/** Run a single node (for "Run Node" command). Returns result or error message. */
+/** Run a single node (for "Run Node" command). If parents are not run, runs chain to this node instead. */
 export async function runNode(
 	app: App,
 	settings: ZettelPluginSettings,
@@ -296,14 +431,43 @@ export async function runNode(
 	if (!role) return { ok: false, message: "Node color is not mapped to a role." };
 	if (role === "green") return { ok: false, message: "Green nodes are output-only." };
 	const parentIds = getParentIdsSortedByY(nodeId, data);
+	const canvasKey = getCanvasKey(canvasFilePath);
 	for (const pid of parentIds) {
-		if (getNodeResult(getCanvasKey(canvasFilePath), pid) == null) {
-			return { ok: false, message: "Parent node(s) have not been run yet. Run chain or run parents first." };
+		if (getNodeResult(canvasKey, pid) == null) {
+			return runChain(app, settings, canvasFilePath, nodeId, liveCanvas);
 		}
 	}
+	try {
+		setRunningNodeId(canvasKey, nodeId);
+		await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nodeId, liveCanvas);
+		return { ok: true };
+	} catch (e) {
+		return { ok: false, message: e instanceof Error ? e.message : String(e) };
+	} finally {
+		setRunningNodeId(canvasKey, null);
+	}
+}
+
+/** Run all nodes reachable from any root, in topological order. */
+export async function runEntireCanvas(
+	app: App,
+	settings: ZettelPluginSettings,
+	canvasFilePath: string,
+	liveCanvas: LiveCanvas | null
+): Promise<{ ok: boolean; message?: string }> {
+	const data = await loadCanvasData(app.vault, canvasFilePath);
+	if (!data) return { ok: false, message: "Could not load canvas data." };
+	const order = topologicalOrderFull(data, settings);
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
-		await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nodeId, liveCanvas);
+		for (const nid of order) {
+			try {
+				setRunningNodeId(canvasKey, nid);
+				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas);
+			} finally {
+				setRunningNodeId(canvasKey, null);
+			}
+		}
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, message: e instanceof Error ? e.message : String(e) };
@@ -323,11 +487,16 @@ export async function runChain(
 	const roots = getRootIds(data);
 	const rootsReachingCurrent = roots.filter((r) => canReach(data, r, nodeId));
 	if (rootsReachingCurrent.length === 0) return { ok: false, message: "No root reaches this node." };
-	const order = topologicalOrderToTarget(data, nodeId);
+	const order = topologicalOrderToTarget(data, nodeId, settings);
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
 		for (const nid of order) {
-			await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas);
+			try {
+				setRunningNodeId(canvasKey, nid);
+				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas);
+			} finally {
+				setRunningNodeId(canvasKey, null);
+			}
 		}
 		return { ok: true };
 	} catch (e) {
@@ -351,6 +520,26 @@ export async function dismissOutput(
 	data.edges = data.edges.filter(
 		(e) => !(e.fromNode === sourceNodeId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT)
 	);
+	liveCanvas?.setData?.(data);
+	if (liveCanvas?.requestSave) liveCanvas.requestSave();
+	await saveCanvasData(vault, canvasFilePath, data);
+}
+
+/** Remove all Green output nodes and their output edges on the canvas; mutates data and saves. */
+export async function dismissAllOutput(
+	vault: App["vault"],
+	canvasFilePath: string,
+	liveCanvas: LiveCanvas | null
+): Promise<void> {
+	const data = await loadCanvasData(vault, canvasFilePath);
+	if (!data) return;
+	const outputNodeIds = new Set(
+		data.edges
+			.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT)
+			.map((e) => e.toNode)
+	);
+	data.nodes = data.nodes.filter((n) => !outputNodeIds.has(n.id));
+	data.edges = data.edges.filter((e) => parseEdgeVariableName(e.label) !== EDGE_LABEL_OUTPUT);
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	await saveCanvasData(vault, canvasFilePath, data);

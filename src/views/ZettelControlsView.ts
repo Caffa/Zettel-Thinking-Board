@@ -53,6 +53,18 @@ export class ZettelControlsView extends ItemView {
 						await this.plugin.saveSettings();
 					})
 			);
+		new Setting(el)
+			.setName("Model node (tertiary)")
+			.setDesc("Ollama model for tertiary model nodes")
+			.addText((text) =>
+				text
+					.setPlaceholder("e.g. phi")
+					.setValue(this.plugin.settings.ollamaRedModel)
+					.onChange(async (value) => {
+						this.plugin.settings.ollamaRedModel = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		// Kernel controls
 		el.createEl("h4", { text: "Kernel controls", cls: "ztb-section-title" });

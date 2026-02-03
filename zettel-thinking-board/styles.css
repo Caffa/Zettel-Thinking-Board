@@ -130,3 +130,96 @@
 .ztb-legend-swatch--preset-4 { background-color: var(--canvas-color-4, #22c55e); }
 .ztb-legend-swatch--preset-5 { background-color: var(--canvas-color-5, #a855f7); }
 .ztb-legend-swatch--preset-6 { background-color: var(--canvas-color-6, #3b82f6); }
+
+/* SVG edge status label — scales with canvas zoom like Obsidian edge labels, paints on top (z-index) */
+.ztb-edge-mode-svg-label {
+	pointer-events: none;
+}
+
+.ztb-edge-mode-svg-label .ztb-edge-mode-label {
+	font-family: var(--font-interface);
+}
+
+/* Injected: blue */
+.ztb-edge-mode-svg-label[data-ztb-edge-state="inject"] text {
+	fill: var(--color-blue, #3b82f6);
+}
+
+/* Concatenated: green */
+.ztb-edge-mode-svg-label[data-ztb-edge-state="concatenate"] text {
+	fill: var(--color-green, #22c55e);
+}
+
+/* Running: orange text + dot with pulse */
+.ztb-edge-mode-svg-label[data-ztb-edge-state="running"] text {
+	fill: var(--color-orange, #e68619);
+}
+.ztb-edge-mode-svg-label[data-ztb-edge-state="running"] .ztb-edge-mode-icon {
+	fill: var(--color-orange, #e68619);
+	animation: ztb-edge-running-pulse 1s ease-in-out infinite;
+}
+
+/* Legacy HTML edge mode label (if used elsewhere) */
+.ztb-edge-mode-label {
+	pointer-events: none;
+	z-index: 9;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	font-size: 0.7em;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.ztb-edge-mode-icon {
+	flex-shrink: 0;
+}
+
+/* Output edge (run node → green node): smaller, grayed label vs variable edges */
+.ztb-output-edge text {
+	font-size: 0.8em !important;
+	fill: var(--text-faint) !important;
+}
+.ztb-output-edge foreignObject {
+	font-size: 0.8em;
+}
+.ztb-output-edge foreignObject * {
+	color: var(--text-faint);
+}
+
+@keyframes ztb-edge-running-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.4; }
+}
+
+/* Canvas toolbar: Run entire canvas / Dismiss all output (when not in title bar) */
+.ztb-canvas-toolbar {
+	position: absolute;
+	top: var(--size-4-2);
+	right: var(--size-4-2);
+	z-index: 10;
+	display: flex;
+	gap: var(--size-2-1);
+}
+.ztb-toolbar-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-smaller);
+	color: var(--text-normal);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	cursor: pointer;
+}
+.ztb-toolbar-btn:hover {
+	background: var(--background-secondary);
+}
+.ztb-toolbar-icon {
+	flex-shrink: 0;
+}
+.ztb-toolbar-label {
+	white-space: nowrap;
+}

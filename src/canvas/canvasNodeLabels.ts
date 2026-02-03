@@ -4,15 +4,17 @@ import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
-import {getCanvasKey} from "../engine/state";
-import {getEdgeMode} from "../engine/state";
+import {getCanvasKey, getEdgeMode, getRunningNodeId} from "../engine/state";
 
 const LABEL_CLASS = "ztb-node-role-label";
 const LABEL_DATA_ATTR = "data-ztb-role-label";
 const LEGEND_CLASS = "ztb-canvas-legend";
 const EDGE_MODE_LABEL_CLASS = "ztb-edge-mode-label";
 const EDGE_MODE_DATA_ATTR = "data-ztb-edge-id";
-const ROLES: NodeRole[] = ["orange", "purple", "blue", "yellow", "green"];
+const EDGE_MODE_STATE_ATTR = "data-ztb-edge-state";
+const EDGE_MODE_ICON_CLASS = "ztb-edge-mode-icon";
+type EdgeDisplayState = "running" | "inject" | "concatenate";
+const ROLES: NodeRole[] = ["red", "orange", "purple", "blue", "yellow", "green"];
 
 /** Try to get a canvas node's root DOM element from the live canvas (Obsidian uses .canvas-node, no data-id). */
 function getNodeElFromCanvas(canvas: LiveCanvas, nodeId: string): HTMLElement | null {
@@ -61,9 +63,16 @@ export function clearCanvasLegend(containerEl: HTMLElement): void {
 	containerEl.querySelectorAll(`.${LEGEND_CLASS}`).forEach((el) => el.remove());
 }
 
-/** Remove all floating edge mode labels (injected/concatenated) from the container. */
+const EDGE_MODE_FOREIGN_CLASS = "ztb-edge-mode-foreign";
+const EDGE_MODE_SVG_LABEL_CLASS = "ztb-edge-mode-svg-label";
+const OUTPUT_EDGE_GROUP_CLASS = "ztb-output-edge";
+
+/** Remove all floating edge mode labels and output-edge styling from the container. */
 export function clearCanvasEdgeModeLabels(containerEl: HTMLElement): void {
+	containerEl.querySelectorAll(`.${EDGE_MODE_SVG_LABEL_CLASS}`).forEach((el) => el.remove());
+	containerEl.querySelectorAll(`.${EDGE_MODE_FOREIGN_CLASS}`).forEach((el) => el.remove());
 	containerEl.querySelectorAll(`.${EDGE_MODE_LABEL_CLASS}`).forEach((el) => el.remove());
+	containerEl.querySelectorAll(`.${OUTPUT_EDGE_GROUP_CLASS}`).forEach((el) => el.classList.remove(OUTPUT_EDGE_GROUP_CLASS));
 }
 
 /** Create a small color swatch for the legend (preset: resolve var or fallback; custom: hex). */
@@ -128,13 +137,15 @@ function createLabelEl(text: string): HTMLElement {
  * Sync floating role labels for the active canvas: for each node whose color maps to a role,
  * add a small label above the node (e.g. "Comment", "Python"). Removes existing labels first.
  * Uses the live canvas node map to find each node's DOM element (.canvas-node).
+ * @param isStillActive - if provided, called after async load; when false we skip applying to avoid stale canvas
  */
 export async function syncCanvasRoleLabels(
 	vault: Vault,
 	canvasFilePath: string,
 	containerEl: HTMLElement,
 	settings: ZettelPluginSettings,
-	canvas: LiveCanvas | null
+	canvas: LiveCanvas | null,
+	isStillActive?: () => boolean
 ): Promise<void> {
 	if (!settings.showNodeRoleLabels) {
 		clearCanvasRoleLabels(containerEl);
@@ -142,11 +153,13 @@ export async function syncCanvasRoleLabels(
 		return;
 	}
 	const data = await loadCanvasData(vault, canvasFilePath);
+	if (isStillActive && !isStillActive()) return;
 	if (!data?.nodes) {
 		clearCanvasRoleLabels(containerEl);
 		clearCanvasLegend(containerEl);
 		return;
 	}
+	// Clear only after we have data so we never paint a frame with labels removed and nothing to show (avoids flicker).
 	clearCanvasRoleLabels(containerEl);
 	syncCanvasLegend(containerEl, settings);
 	for (const node of data.nodes) {
@@ -169,25 +182,88 @@ function getElCenter(el: HTMLElement): { x: number; y: number } {
 	return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
+/** Path midpoint in viewport (for matching this edge to its path). */
+function getPathMidpointViewport(pathEl: SVGPathElement): { x: number; y: number } {
+	const len = pathEl.getTotalLength();
+	const pt = pathEl.getPointAtLength(len * 0.5);
+	const svg = pathEl.ownerSVGElement;
+	if (!svg) return { x: pt.x, y: pt.y };
+	const ctm = svg.getScreenCTM();
+	if (!ctm) return { x: pt.x, y: pt.y };
+	return {
+		x: pt.x * ctm.a + pt.y * ctm.c + ctm.e,
+		y: pt.x * ctm.b + pt.y * ctm.d + ctm.f,
+	};
+}
+
+/** Path midpoint in SVG coordinates (stable under pan/zoom when used for foreignObject). */
+function getPathMidpointSvg(pathEl: SVGPathElement): { x: number; y: number } {
+	const len = pathEl.getTotalLength();
+	const pt = pathEl.getPointAtLength(len * 0.5);
+	return { x: pt.x, y: pt.y };
+}
+
+/** Find the path whose midpoint is closest to the given viewport point (identifies the arrow for this edge). */
+function findPathForEdge(containerEl: HTMLElement, targetViewportX: number, targetViewportY: number): SVGPathElement | null {
+	const pathEls = Array.from(containerEl.querySelectorAll("path.canvas-display-path"));
+	let best: SVGPathElement | null = null;
+	let bestDist = Infinity;
+	for (const p of pathEls) {
+		if (!(p instanceof SVGPathElement)) continue;
+		const mid = getPathMidpointViewport(p);
+		const dx = mid.x - targetViewportX;
+		const dy = mid.y - targetViewportY;
+		const d = dx * dx + dy * dy;
+		if (d < bestDist) {
+			bestDist = d;
+			best = p;
+		}
+	}
+	return best;
+}
+
 /**
- * Sync floating edge mode labels: for each edge that has a mode (inject/concatenate) in state,
- * show a small label at the edge midpoint so the user sees the mode without it being in the editable label.
+ * Sync floating edge mode labels: for each edge with a mode (inject/concatenate) or incoming to the running node,
+ * show a label in the middle of the arrow via a foreignObject in the edge's SVG <g>, using path midpoint in SVG
+ * coordinates so the label stays correct under pan/zoom. FO is placed at path midpoint (no left offset) to avoid clipping.
+ * @param isStillActive - if provided, called after async load; when false we skip applying to avoid stale canvas
  */
 export async function syncCanvasEdgeModeLabels(
 	vault: Vault,
 	canvasFilePath: string,
 	containerEl: HTMLElement,
-	canvas: LiveCanvas | null
+	canvas: LiveCanvas | null,
+	isStillActive?: () => boolean
 ): Promise<void> {
-	clearCanvasEdgeModeLabels(containerEl);
 	const data = await loadCanvasData(vault, canvasFilePath);
-	if (!data?.edges) return;
+	if (isStillActive && !isStillActive()) return;
+	if (!data?.edges) {
+		clearCanvasEdgeModeLabels(containerEl);
+		return;
+	}
+	// Clear only after we have data so we never paint a frame with labels removed and nothing to show (avoids flicker).
+	clearCanvasEdgeModeLabels(containerEl);
 	const canvasKey = getCanvasKey(canvasFilePath);
-	const containerRect = containerEl.getBoundingClientRect();
+	const runningNodeId = getRunningNodeId(canvasKey);
+	const SVG_NS = "http://www.w3.org/2000/svg";
+	const Y_OFFSET_BELOW_PATH = 12;
+	const FONT_SIZE = 11;
+	const FONT_SIZE_RUNNING = 20;
+	const DOT_R = 2.5;
+	const DOT_R_RUNNING = 5;
+	const DOT_TEXT_GAP = 6;
 	for (const edge of data.edges) {
 		if (isOutputEdge(edge)) continue;
+		const isRunning = runningNodeId != null && edge.toNode === runningNodeId;
 		const mode = getEdgeMode(canvasKey, edge.id);
-		if (!mode) continue;
+		const state: EdgeDisplayState | null = isRunning
+			? "running"
+			: mode === "inject"
+				? "inject"
+				: mode === "concatenate"
+					? "concatenate"
+					: null;
+		if (!state) continue;
 		const fromEl =
 			(canvas && getNodeElFromCanvas(canvas, edge.fromNode)) ||
 			findNodeElementByDataId(containerEl, edge.fromNode);
@@ -197,18 +273,60 @@ export async function syncCanvasEdgeModeLabels(
 		if (!fromEl || !toEl) continue;
 		const fromCenter = getElCenter(fromEl);
 		const toCenter = getElCenter(toEl);
-		const midX = (fromCenter.x + toCenter.x) / 2 - containerRect.left + containerEl.scrollLeft;
-		const midY = (fromCenter.y + toCenter.y) / 2 - containerRect.top + containerEl.scrollTop;
-		const label = document.createElement("div");
-		label.setAttribute("class", EDGE_MODE_LABEL_CLASS);
-		label.setAttribute(EDGE_MODE_DATA_ATTR, edge.id);
-		label.textContent = mode === "inject" ? "(injected)" : "(concatenated)";
-		label.style.position = "absolute";
-		label.style.left = `${midX}px`;
-		label.style.top = `${midY}px`;
-		label.style.transform = "translate(-50%, 0)";
-		// Slight offset so it sits below the edge line / main label
-		label.style.marginTop = "4px";
-		containerEl.appendChild(label);
+		const targetViewportX = (fromCenter.x + toCenter.x) / 2;
+		const targetViewportY = (fromCenter.y + toCenter.y) / 2;
+		const pathEl = findPathForEdge(containerEl, targetViewportX, targetViewportY);
+		if (!pathEl) continue;
+		const group = pathEl.closest("g");
+		if (!group) continue;
+		const mid = getPathMidpointSvg(pathEl);
+		const labelGroup = document.createElementNS(SVG_NS, "g");
+		labelGroup.setAttribute("class", EDGE_MODE_SVG_LABEL_CLASS);
+		labelGroup.setAttribute(EDGE_MODE_DATA_ATTR, edge.id);
+		labelGroup.setAttribute(EDGE_MODE_STATE_ATTR, state);
+		labelGroup.setAttribute("transform", `translate(${mid.x}, ${mid.y + Y_OFFSET_BELOW_PATH})`);
+		labelGroup.setAttribute("style", "z-index: 100; isolation: isolate;");
+		const textContent =
+			state === "running" ? "…" : state === "inject" ? "(injected)" : "(concatenated)";
+		let textX = 0;
+		const fontSize = state === "running" ? FONT_SIZE_RUNNING : FONT_SIZE;
+		if (state === "running") {
+			const circle = document.createElementNS(SVG_NS, "circle");
+			circle.setAttribute("class", EDGE_MODE_ICON_CLASS);
+			circle.setAttribute("cx", String(DOT_R_RUNNING + 2));
+			circle.setAttribute("cy", String(fontSize * 0.4));
+			circle.setAttribute("r", String(DOT_R_RUNNING));
+			labelGroup.appendChild(circle);
+			textX = DOT_R_RUNNING * 2 + DOT_TEXT_GAP;
+		}
+		const textEl = document.createElementNS(SVG_NS, "text");
+		textEl.setAttribute("class", EDGE_MODE_LABEL_CLASS);
+		textEl.setAttribute("x", String(textX));
+		textEl.setAttribute("y", String(fontSize * 0.35));
+		textEl.setAttribute("font-size", String(fontSize));
+		textEl.setAttribute("text-anchor", "start");
+		textEl.setAttribute("dominant-baseline", "central");
+		textEl.textContent = textContent;
+		labelGroup.appendChild(textEl);
+		group.appendChild(labelGroup);
+	}
+	// Mark output edges so their label can be styled smaller/grayed
+	for (const edge of data.edges) {
+		if (!isOutputEdge(edge)) continue;
+		const fromEl =
+			(canvas && getNodeElFromCanvas(canvas, edge.fromNode)) ||
+			findNodeElementByDataId(containerEl, edge.fromNode);
+		const toEl =
+			(canvas && getNodeElFromCanvas(canvas, edge.toNode)) ||
+			findNodeElementByDataId(containerEl, edge.toNode);
+		if (!fromEl || !toEl) continue;
+		const fromCenter = getElCenter(fromEl);
+		const toCenter = getElCenter(toEl);
+		const targetViewportX = (fromCenter.x + toCenter.x) / 2;
+		const targetViewportY = (fromCenter.y + toCenter.y) / 2;
+		const pathEl = findPathForEdge(containerEl, targetViewportX, targetViewportY);
+		if (!pathEl) continue;
+		const group = pathEl.closest("g");
+		if (group) group.classList.add(OUTPUT_EDGE_GROUP_CLASS);
 	}
 }

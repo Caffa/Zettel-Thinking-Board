@@ -1,7 +1,13 @@
-import {Menu, Notice, Plugin, WorkspaceLeaf} from "obsidian";
+import {ItemView, Menu, Notice, Plugin, WorkspaceLeaf} from "obsidian";
 import {DEFAULT_SETTINGS, ZettelPluginSettings, ZettelSettingTab} from "./settings";
 import {ZettelControlsView, ZETTEL_CONTROLS_VIEW_TYPE} from "./views/ZettelControlsView";
-import {dismissOutput as runnerDismissOutput, runChain as runnerRunChain, runNode as runnerRunNode} from "./engine/runner";
+import {
+	dismissAllOutput as runnerDismissAllOutput,
+	dismissOutput as runnerDismissOutput,
+	runChain as runnerRunChain,
+	runEntireCanvas as runnerRunEntireCanvas,
+	runNode as runnerRunNode,
+} from "./engine/runner";
 import {
 	clearCanvasEdgeModeLabels,
 	clearCanvasLegend,
@@ -114,6 +120,30 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			const timeoutId = window.setTimeout(registerCanvasNodeMenu, 0);
 			this.register(() => window.clearTimeout(timeoutId));
 
+			// Canvas background context menu: use undocumented "canvas:edge-menu" (Obsidian broadcasts it;
+			// when right-click is on empty area, edge is null). Same pattern as canvas:node-menu: addItem with setTitle, setIcon, onClick.
+			const addCanvasMenuItems = (menu: Menu): void => {
+				menu.addItem((item) =>
+					item.setTitle("Run entire canvas").setIcon("play").onClick(() => this.runEntireCanvas())
+				);
+				menu.addItem((item) =>
+					item.setTitle("Dismiss all output").setIcon("trash").onClick(() => this.dismissAllOutput())
+				);
+			};
+			try {
+				const onWorkspace = this.app.workspace.on.bind(this.app.workspace) as (
+					name: string,
+					callback: (menu: Menu, edge: unknown) => void
+				) => ReturnType<typeof this.app.workspace.on>;
+				this.registerEvent(
+					onWorkspace("canvas:edge-menu", (menu: Menu, edge: unknown) => {
+						if (edge == null) addCanvasMenuItems(menu);
+					})
+				);
+			} catch (e) {
+				console.error("Zettel Thinking Board: could not register canvas background menu.", e);
+			}
+
 			// Debug: command to test if we can affect the canvas and if canvas:node-menu ever fires.
 			this.addCommand({
 				id: "zettel-debug-canvas-hook",
@@ -163,6 +193,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 						clearCanvasRoleLabels(roleLabelsContainerEl);
 						clearCanvasLegend(roleLabelsContainerEl);
 						clearCanvasEdgeModeLabels(roleLabelsContainerEl);
+						this.clearCanvasToolbar(roleLabelsContainerEl);
 						roleLabelsContainerEl = null;
 					}
 					return;
@@ -171,17 +202,37 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 					clearCanvasRoleLabels(roleLabelsContainerEl);
 					clearCanvasLegend(roleLabelsContainerEl);
 					clearCanvasEdgeModeLabels(roleLabelsContainerEl);
+					this.clearCanvasToolbar(roleLabelsContainerEl);
 				}
 				roleLabelsContainerEl = view.containerEl;
+				// Add "Run entire canvas" and "Dismiss all output" to the canvas (title bar if supported, else toolbar in container).
+				// Use a property on the view so we only add once even after plugin hot-reload (WeakSet would be cleared on reload).
+				const leaf = this.app.workspace.activeLeaf;
+				let addedToTitleBar = false;
+				type ViewWithFlag = ItemView & { addAction?: (icon: string, title: string, callback: (evt: MouseEvent) => void) => HTMLElement; _ztbTitleBarActionsAdded?: boolean };
+				if (leaf?.view) {
+					const itemView = leaf.view as ViewWithFlag;
+					if (itemView._ztbTitleBarActionsAdded) {
+						addedToTitleBar = true;
+					} else if (typeof itemView.addAction === "function") {
+						itemView.addAction("play", "Run entire canvas", () => this.runEntireCanvas());
+						itemView.addAction("trash", "Dismiss all output", () => this.dismissAllOutput());
+						itemView._ztbTitleBarActionsAdded = true;
+						addedToTitleBar = true;
+					}
+				}
+				if (!addedToTitleBar) this.addCanvasToolbarToContainer(view.containerEl);
 				const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
-				syncCanvasRoleLabels(this.app.vault, view.file.path, view.containerEl, this.settings, liveCanvas);
-				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas);
+				const isStillActive = (): boolean => this.getActiveCanvasView()?.containerEl === roleLabelsContainerEl;
+				syncCanvasRoleLabels(this.app.vault, view.file.path, view.containerEl, this.settings, liveCanvas, isStillActive);
+				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas, isStillActive);
 				if (roleLabelsIntervalId == null) {
 					roleLabelsIntervalId = window.setInterval(() => {
 						const v = this.getActiveCanvasView();
 						if (v != null && v.containerEl === roleLabelsContainerEl) {
-							syncCanvasRoleLabels(this.app.vault, v.file.path, v.containerEl, this.settings, v.canvas as import("./engine/canvasApi").LiveCanvas);
-							syncCanvasEdgeModeLabels(this.app.vault, v.file.path, v.containerEl, v.canvas as import("./engine/canvasApi").LiveCanvas);
+							const stillActive = (): boolean => this.getActiveCanvasView()?.containerEl === roleLabelsContainerEl;
+							syncCanvasRoleLabels(this.app.vault, v.file.path, v.containerEl, this.settings, v.canvas as import("./engine/canvasApi").LiveCanvas, stillActive);
+							syncCanvasEdgeModeLabels(this.app.vault, v.file.path, v.containerEl, v.canvas as import("./engine/canvasApi").LiveCanvas, stillActive);
 						}
 					}, 2000);
 					(this as unknown as { _roleLabelsIntervalId: number })._roleLabelsIntervalId = roleLabelsIntervalId;
@@ -264,6 +315,29 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		return { canvas: v.canvas, file: v.file, containerEl: v.containerEl };
 	}
 
+	private static readonly ZTB_TOOLBAR_CLASS = "ztb-canvas-toolbar";
+
+	/** Remove the ZTB toolbar from the canvas container (when switching away or when addAction was used). */
+	clearCanvasToolbar(containerEl: HTMLElement): void {
+		containerEl.querySelectorAll(`.${ZettelThinkingBoardPlugin.ZTB_TOOLBAR_CLASS}`).forEach((el) => el.remove());
+	}
+
+	/** Add "Run entire canvas" and "Dismiss all output" buttons into the canvas container (fallback when view has no addAction). */
+	addCanvasToolbarToContainer(containerEl: HTMLElement): void {
+		if (containerEl.querySelector(`.${ZettelThinkingBoardPlugin.ZTB_TOOLBAR_CLASS}`)) return;
+		const bar = containerEl.createDiv({ cls: ZettelThinkingBoardPlugin.ZTB_TOOLBAR_CLASS });
+		const runBtn = bar.createEl("button", { cls: "ztb-toolbar-btn" });
+		runBtn.setAttribute("aria-label", "Run entire canvas");
+		runBtn.createSpan({ cls: "ztb-toolbar-icon", text: "▶" });
+		runBtn.createSpan({ cls: "ztb-toolbar-label", text: "Run entire canvas" });
+		runBtn.addEventListener("click", () => this.runEntireCanvas());
+		const dismissBtn = bar.createEl("button", { cls: "ztb-toolbar-btn" });
+		dismissBtn.setAttribute("aria-label", "Dismiss all output");
+		dismissBtn.createSpan({ cls: "ztb-toolbar-icon", text: "🗑" });
+		dismissBtn.createSpan({ cls: "ztb-toolbar-label", text: "Dismiss all output" });
+		dismissBtn.addEventListener("click", () => this.dismissAllOutput());
+	}
+
 	/** Run a single node (call from context menu with node id). */
 	async runNode(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
@@ -288,6 +362,23 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		if (!view) return;
 		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
 		await runnerDismissOutput(this.app.vault, view.file.path, nodeId, this.settings, liveCanvas);
+	}
+
+	/** Run entire canvas (call from canvas background context menu). */
+	async runEntireCanvas(): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) return;
+		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas);
+		if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
+	}
+
+	/** Dismiss all output nodes on the canvas (call from canvas background context menu). */
+	async dismissAllOutput(): Promise<void> {
+		const view = this.getActiveCanvasView();
+		if (!view) return;
+		const liveCanvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
+		await runnerDismissAllOutput(this.app.vault, view.file.path, liveCanvas);
 	}
 
 	/** Get kernel for the active (or first open) canvas (for side panel to wire obsidian_log). */

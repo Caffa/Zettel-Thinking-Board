@@ -22,7 +22,7 @@ export function normalizeColor(c: CanvasColor | undefined): string {
 export function getNodeRole(node: { color?: CanvasColor }, settings: ZettelPluginSettings): NodeRole | null {
 	const nodeColor = normalizeColor(node.color);
 	if (!nodeColor) return null;
-	const roles: NodeRole[] = ["orange", "purple", "blue", "yellow", "green"];
+	const roles: NodeRole[] = ["red", "orange", "purple", "blue", "yellow", "green"];
 	for (const role of roles) {
 		const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
 		const settingColor = normalizeColor(settings[key] as CanvasColor | undefined);
