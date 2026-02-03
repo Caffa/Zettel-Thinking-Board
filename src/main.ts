@@ -19,6 +19,8 @@ import {saveCanvasData} from "./canvas/nodes";
 import type {CanvasData} from "./canvas/types";
 import {EDGE_LABEL_OUTPUT} from "./canvas/types";
 import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
+import {getExample1CanvasData} from "./tutorials/example1Data";
+import {getExample4CanvasData} from "./tutorials/example4Data";
 
 /** Layout constants: comment margins left/right, central lane for nodes, no overlap. */
 const TUT_LEFT = 80;
@@ -41,6 +43,31 @@ const TUT_GROUP_PAD = 18;
 function tutorialColor(settings: ZettelPluginSettings, key: keyof ZettelPluginSettings): string {
 	const v = settings[key];
 	return typeof v === "string" && v.trim() !== "" ? v.trim() : (DEFAULT_SETTINGS[key] as string);
+}
+
+/** X-offset for Example 4 (Data Pipeline) so it sits to the right of Example 1 (Multi-Source Research). */
+const TUTORIAL_EXAMPLE4_X_OFFSET = 1400;
+const TUTORIAL_EXAMPLE4_ID_PREFIX = "e4-";
+
+/** Build combined tutorial canvas: Example 1 (left) and Example 4 (right) side by side. */
+function getCombinedTutorialCanvasData(): CanvasData {
+	const d1 = getExample1CanvasData();
+	const d2 = getExample4CanvasData();
+	const e4Nodes = d2.nodes.map((node) => ({
+		...node,
+		id: TUTORIAL_EXAMPLE4_ID_PREFIX + node.id,
+		x: (node as { x: number }).x + TUTORIAL_EXAMPLE4_X_OFFSET,
+	}));
+	const e4Edges = d2.edges.map((edge, i) => ({
+		...edge,
+		id: `${TUTORIAL_EXAMPLE4_ID_PREFIX}edge-${i}`,
+		fromNode: TUTORIAL_EXAMPLE4_ID_PREFIX + edge.fromNode,
+		toNode: TUTORIAL_EXAMPLE4_ID_PREFIX + edge.toNode,
+	}));
+	return {
+		nodes: [...d1.nodes, ...e4Nodes],
+		edges: [...d1.edges, ...e4Edges],
+	};
 }
 
 /** Build tutorial canvas: columns with comment margins, node lane center, edges, groups. */
@@ -540,7 +567,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			n += 1;
 			path = normalizePath(`${baseName} ${n}.canvas`);
 		}
-		const data = getTutorialCanvasData(this.settings);
+		const data = getCombinedTutorialCanvasData();
 		const saved = await saveCanvasData(vault, path, data);
 		if (!saved) {
 			new Notice("Could not create tutorial canvas.");
@@ -552,7 +579,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		} else {
 			await workspace.openLinkText(path, "", false);
 		}
-		new Notice("Tutorial canvas created. Follow the cards from top to bottom: try Run node on the orange card, then explore concat vs variable injection and the Run commands.");
+		new Notice("Tutorial canvas created. Left: Multi-Source Research (concatenation). Right: Data Pipeline (Python state). Right-click a node → Run node or Run chain.");
 	}
 
 	/** Returns the active canvas view if the active leaf is a canvas. */

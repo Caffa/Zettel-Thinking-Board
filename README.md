@@ -70,6 +70,66 @@ By default, all parent outputs are concatenated and passed to the child. You can
 
 Example: Orange → Purple with edge label `draft`. In the Purple note: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." Only the draft is injected; no extra concatenation.
 
+## 📚 Tutorials
+
+### Example 1: Multi-Source Research Brief (Basic)
+
+**What you'll learn:** How concatenation combines multiple inputs into unified context
+
+```mermaid
+graph TD
+    TopicOverview[Yellow: Topic Overview] --> Summarizer[Orange: Summarize All]
+    RecentNews[Yellow: Recent News] --> Summarizer
+    ExpertOpinions[Yellow: Expert Opinions] --> Summarizer
+    Summarizer --> Output[Green: Unified Brief]
+```
+
+**Use case:** "I have multiple information sources and need a synthesized summary"
+
+**How it works:**
+1. Three Yellow nodes contain different aspects of a topic (technology, news, expert opinions)
+2. All three connect to one Orange node (the summarizer)
+3. By default, all parent outputs are concatenated with `\n\n` separator
+4. The Orange node receives all three texts as context before its prompt runs
+5. Run the chain to see the unified summary in the Green output node
+
+**Try it:** Open `tutorials/example-1-multi-source-research.canvas`
+
+---
+
+### Example 4: Multi-Stage Data Pipeline (Advanced)
+
+**What you'll learn:** Persistent Python state, data accumulation, side-channel logging
+
+```mermaid
+graph TD
+    DatasetA[Yellow: Dataset A] --> Extract1[Blue: Parse and Store A]
+    DatasetB[Yellow: Dataset B] --> Extract2[Blue: Parse and Store B]
+    Extract1 --> Analyze[Blue: Analyze Combined Data]
+    Extract2 --> Analyze
+    Analyze --> Report[Orange: Write Insights]
+    Extract1 --> Out1[Green: Stored A]
+    Extract2 --> Out2[Green: Stored B]
+    Analyze --> Out3[Green: Statistics]
+    Report --> Out4[Green: Narrative Report]
+```
+
+**Use case:** "I'm processing multiple data sources and need to aggregate before analysis"
+
+**How it works:**
+1. Two Yellow nodes contain raw datasets (sales data)
+2. Two Blue nodes parse and store data in a shared `datasets` variable
+3. **Python kernel persists state** - variables survive between node executions
+4. Third Blue node accesses accumulated data from both previous nodes
+5. Orange node generates a narrative report from the analysis
+6. `obsidian_log()` sends debug info to side panel without cluttering the canvas
+
+**Key concept:** The Python kernel stays alive per canvas, enabling stateful workflows where data accumulates across multiple nodes.
+
+**Try it:** Open `tutorials/example-4-data-pipeline.canvas`
+
+---
+
 ## ⚙️ Settings and UX
 
 The plugin settings are organized so that each **model** (primary, secondary, tertiary) is configured in one place:

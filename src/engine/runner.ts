@@ -14,7 +14,7 @@ import {
 	saveCanvasData,
 } from "../canvas/nodes";
 import type {AllCanvasNodeData, CanvasData, CanvasEdgeData, CanvasTextData} from "../canvas/types";
-import { parseEdgeVariableName } from "../canvas/types";
+import { getTextNodeContent, parseEdgeVariableName } from "../canvas/types";
 import {isTextNode} from "../canvas/types";
 import type {LiveCanvas} from "./canvasApi";
 import {getKernelForCanvas} from "./kernelManager";
@@ -153,6 +153,35 @@ function sortQueueByNonAIFirst(
 	});
 }
 
+/** True if text is already wrapped in ```python or ``` ... ```. */
+function isPythonCodeFenced(text: string): boolean {
+	const lines = text.trim().split(/\r?\n/);
+	if (lines.length < 2) return false;
+	const first = lines[0];
+	const last = lines[lines.length - 1];
+	if (first == null || last == null) return false;
+	return /^```(?:python)?\s*$/i.test(first.trim()) && /^```\s*$/.test(last.trim());
+}
+
+/** Wrap in ```python ... ``` if not already fenced (so Obsidian renders # as comment). */
+function ensurePythonCodeFence(text: string): string {
+	if (isPythonCodeFenced(text)) return text;
+	return "```python\n" + text.trim() + "\n```";
+}
+
+/** Strip optional markdown code fence (```python or ```) so execution runs raw code. */
+function stripPythonCodeFence(template: string): string {
+	const lines = template.split(/\r?\n/);
+	if (lines.length < 2) return template.trim();
+	const first = lines[0];
+	const last = lines[lines.length - 1];
+	if (first == null || last == null) return template.trim();
+	if (/^```(?:python)?\s*$/i.test(first.trim()) && /^```\s*$/.test(last.trim())) {
+		return lines.slice(1, -1).join("\n").trim();
+	}
+	return template.trim();
+}
+
 /** Build concatenated context, template with {{var:name}} substituted, and per-edge mode. */
 function buildInputWithVariables(
 	canvasKey: string,
@@ -244,6 +273,15 @@ async function runSingleNode(
 		}
 		return "";
 	}
+	// For Python (blue) text nodes, auto-wrap content in ```python ... ``` so # comments render correctly
+	if (role === "blue" && isTextNode(node)) {
+		const raw = getTextNodeContent(node as CanvasTextData);
+		if (!isPythonCodeFenced(raw)) {
+			(node as CanvasTextData).text = ensurePythonCodeFence(raw);
+			liveCanvas?.setData?.(data);
+			await saveCanvasData(app.vault, canvasFilePath, data);
+		}
+	}
 	const incoming = getIncomingEdgesWithLabels(nodeId, data);
 	const nodeInput = await getNodeContent(node, app.vault);
 	const { concatenatedPart, template, edgeModes } = buildInputWithVariables(
@@ -298,7 +336,8 @@ async function runSingleNode(
 	}
 	if (role === "blue") {
 		const kernel = getKernelForCanvas(canvasKey, settings.pythonPath);
-		const result = await kernel.run(template, concatenatedPart);
+		const code = stripPythonCodeFence(template);
+		const result = await kernel.run(code, concatenatedPart);
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);

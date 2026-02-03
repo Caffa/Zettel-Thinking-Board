@@ -1,0 +1,76 @@
+import type {CanvasData} from "../canvas/types";
+
+/** Example 4: Multi-Stage Data Pipeline — persistent Python state, data accumulation. */
+export function getExample4CanvasData(): CanvasData {
+	return {
+		nodes: [
+			{
+				id: "yellow-dataset-a",
+				type: "text",
+				text: "Product A: 45 sales\nProduct B: 32 sales\nProduct C: 67 sales",
+				x: 100,
+				y: 100,
+				width: 300,
+				height: 140,
+				color: "3",
+			},
+			{
+				id: "yellow-dataset-b",
+				type: "text",
+				text: "Product A: 50 sales\nProduct B: 28 sales\nProduct C: 71 sales",
+				x: 700,
+				y: 100,
+				width: 300,
+				height: 140,
+				color: "3",
+			},
+			{
+				id: "blue-extract1",
+				type: "text",
+				text: "# Initialize shared state on first run\nif 'datasets' not in globals():\n    datasets = []\n    obsidian_log(\"Initialized dataset storage\")\n\n# Parse input and store\ndata = input.strip().split('\\n')\ndatasets.append({'source': 'A', 'entries': data})\nobsidian_log(f\"Stored {len(data)} entries from A\")\nprint(f\"Parsed {len(data)} entries from Dataset A\")",
+				x: 100,
+				y: 320,
+				width: 400,
+				height: 280,
+				color: "6",
+			},
+			{
+				id: "blue-extract2",
+				type: "text",
+				text: "# Reuse persistent state\ndata = input.strip().split('\\n')\ndatasets.append({'source': 'B', 'entries': data})\nobsidian_log(f\"Stored {len(data)} entries from B\")\nprint(f\"Parsed {len(data)} entries from Dataset B\")",
+				x: 600,
+				y: 320,
+				width: 400,
+				height: 200,
+				color: "6",
+			},
+			{
+				id: "blue-analyze",
+				type: "text",
+				text: "# Access accumulated data\ntotal = sum(len(d['entries']) for d in datasets)\nsources = [d['source'] for d in datasets]\n\nprint(f\"Total entries: {total}\")\nprint(f\"Sources: {', '.join(sources)}\")\nprint(f\"Datasets processed: {len(datasets)}\")\nobsidian_log(f\"Analysis complete: {total} total entries\")",
+				x: 300,
+				y: 600,
+				width: 450,
+				height: 240,
+				color: "6",
+			},
+			{
+				id: "orange-report",
+				type: "text",
+				text: "Based on the analysis above, write a 2-paragraph summary of the sales data trends across both datasets. Highlight which products performed best and any patterns you notice.",
+				x: 300,
+				y: 920,
+				width: 450,
+				height: 160,
+				color: "1",
+			},
+		],
+		edges: [
+			{ id: "edge-dataseta-extract1", fromNode: "yellow-dataset-a", toNode: "blue-extract1" },
+			{ id: "edge-datasetb-extract2", fromNode: "yellow-dataset-b", toNode: "blue-extract2" },
+			{ id: "edge-extract1-analyze", fromNode: "blue-extract1", toNode: "blue-analyze" },
+			{ id: "edge-extract2-analyze", fromNode: "blue-extract2", toNode: "blue-analyze" },
+			{ id: "edge-analyze-report", fromNode: "blue-analyze", toNode: "orange-report" },
+		],
+	};
+}

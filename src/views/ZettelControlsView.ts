@@ -200,6 +200,7 @@ export class ZettelControlsView extends ItemView {
 			"Right-click a card and choose Run node to run just that card, or Run chain to run it and every card that feeds into it.",
 			"The green card is where answers and results appear. It gets created or updated when you run an AI or Python card.",
 			"You can plug text from one card into another by using {{var:name}} in the card text and giving the edge that variable name as its label.",
+			"Python (blue) cards are auto-wrapped in a code block so # comments render as comments; the plugin adds the fence when you run the node if needed.",
 			"Use the command \"Create tutorial canvas\" for a full showcase: every node type, concat vs variable injection, Run buttons, and this sidebar.",
 		];
 		for (const tip of tips) {

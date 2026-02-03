@@ -1,0 +1,61 @@
+{
+	"nodes": [
+		{
+			"id": "yellow-topic-overview",
+			"type": "text",
+			"text": "Bitcoin is a decentralized cryptocurrency using blockchain technology. It was created in 2009 by Satoshi Nakamoto as a peer-to-peer electronic cash system. The network operates without a central authority, using cryptographic proof instead of trust.",
+			"x": 50,
+			"y": 100,
+			"width": 350,
+			"height": 180,
+			"color": "3"
+		},
+		{
+			"id": "yellow-recent-news",
+			"type": "text",
+			"text": "SEC approves first Bitcoin ETF in January 2024. Price reached new all-time high of $73,000 in March 2024. Major institutional adoption continues with companies like BlackRock and Fidelity launching Bitcoin products. El Salvador continues using Bitcoin as legal tender.",
+			"x": 450,
+			"y": 100,
+			"width": 350,
+			"height": 180,
+			"color": "3"
+		},
+		{
+			"id": "yellow-expert-opinions",
+			"type": "text",
+			"text": "Vitalik Buterin: 'Bitcoin proved that decentralized consensus is possible and opened the door for blockchain innovation.'\n\nMichael Saylor: 'Bitcoin is digital gold for the 21st century and the apex property of the human race.'\n\nCathy Wood: 'Bitcoin could reach $1 million per coin as institutional adoption accelerates.'",
+			"x": 850,
+			"y": 100,
+			"width": 350,
+			"height": 220,
+			"color": "3"
+		},
+		{
+			"id": "orange-summarizer",
+			"type": "text",
+			"text": "Create a 3-sentence executive summary combining all the information above. Focus on: technology fundamentals, recent market developments, and expert perspectives on future potential.",
+			"x": 450,
+			"y": 400,
+			"width": 400,
+			"height": 160,
+			"color": "1"
+		}
+	],
+	"edges": [
+		{
+			"id": "edge-yellow1-orange",
+			"fromNode": "yellow-topic-overview",
+			"toNode": "orange-summarizer"
+		},
+		{
+			"id": "edge-yellow2-orange",
+			"fromNode": "yellow-recent-news",
+			"toNode": "orange-summarizer"
+		},
+		{
+			"id": "edge-yellow3-orange",
+			"fromNode": "yellow-expert-opinions",
+			"toNode": "orange-summarizer"
+		}
+	]
+}
