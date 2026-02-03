@@ -45,21 +45,21 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	ollamaPurpleModel: "",
 	colorOrange: "1",
 	colorPurple: "2",
-	colorBlue: "3",
-	colorYellow: "4",
-	colorGreen: "5",
+	colorBlue: "6",
+	colorYellow: "3",
+	colorGreen: "4",
 	showNodeRoleLabels: true,
 	pythonPath: "python3",
 };
 
-/** Fallback hex for preset 1–6 when CSS var is missing or empty. */
+/** Fallback hex for preset 1–6 to match Obsidian order (mod-canvas-color-N). */
 const PRESET_HEX: Record<string, string> = {
-	"1": "#e68619",
-	"2": "#a855f7",
-	"3": "#3b82f6",
-	"4": "#eab308",
-	"5": "#22c55e",
-	"6": "#ef4444",
+	"1": "#ef4444",
+	"2": "#e68619",
+	"3": "#eab308",
+	"4": "#22c55e",
+	"5": "#a855f7",
+	"6": "#3b82f6",
 };
 
 /** Resolve preset color: use --canvas-color-N when valid, else fallback hex. */
@@ -72,14 +72,14 @@ export function getPresetColor(presetNumber: 1 | 2 | 3 | 4 | 5 | 6): string {
 	return PRESET_HEX[String(n)] ?? "#888";
 }
 
-/** Obsidian canvas preset 1–6: label for settings UI. */
+/** Obsidian canvas preset 1–6: color label for settings dropdown (matches PRESET_HEX order). */
 const PRESET_COLORS: { value: CanvasColor; label: string }[] = [
-	{ value: "1", label: "Preset 1" },
-	{ value: "2", label: "Preset 2" },
-	{ value: "3", label: "Preset 3" },
-	{ value: "4", label: "Preset 4" },
-	{ value: "5", label: "Preset 5" },
-	{ value: "6", label: "Preset 6" },
+	{ value: "1", label: "Red" },
+	{ value: "2", label: "Orange" },
+	{ value: "3", label: "Yellow" },
+	{ value: "4", label: "Green" },
+	{ value: "5", label: "Purple" },
+	{ value: "6", label: "Blue" },
 ];
 
 const PRESET_SWATCH_CLASS = "ztb-color-swatch--preset-";

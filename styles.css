@@ -77,12 +77,12 @@
 }
 
 /* Preset swatches use Obsidian canvas CSS variables when available (e.g. canvas open); fallback hex when not in scope (e.g. Settings only) */
-.ztb-color-swatch.ztb-color-swatch--preset-1 { background-color: var(--canvas-color-1, #e68619); }
-.ztb-color-swatch.ztb-color-swatch--preset-2 { background-color: var(--canvas-color-2, #a855f7); }
-.ztb-color-swatch.ztb-color-swatch--preset-3 { background-color: var(--canvas-color-3, #3b82f6); }
-.ztb-color-swatch.ztb-color-swatch--preset-4 { background-color: var(--canvas-color-4, #eab308); }
-.ztb-color-swatch.ztb-color-swatch--preset-5 { background-color: var(--canvas-color-5, #22c55e); }
-.ztb-color-swatch.ztb-color-swatch--preset-6 { background-color: var(--canvas-color-6, #ef4444); }
+.ztb-color-swatch.ztb-color-swatch--preset-1 { background-color: var(--canvas-color-1, #ef4444); }
+.ztb-color-swatch.ztb-color-swatch--preset-2 { background-color: var(--canvas-color-2, #e68619); }
+.ztb-color-swatch.ztb-color-swatch--preset-3 { background-color: var(--canvas-color-3, #eab308); }
+.ztb-color-swatch.ztb-color-swatch--preset-4 { background-color: var(--canvas-color-4, #22c55e); }
+.ztb-color-swatch.ztb-color-swatch--preset-5 { background-color: var(--canvas-color-5, #a855f7); }
+.ztb-color-swatch.ztb-color-swatch--preset-6 { background-color: var(--canvas-color-6, #3b82f6); }
 
 /* Role label on canvas nodes: uses Obsidian's .canvas-node-label (same as file nodes) */
 .ztb-node-role-label.canvas-node-label {
@@ -124,9 +124,9 @@
 	border: 1px solid var(--background-modifier-border);
 	flex-shrink: 0;
 }
-.ztb-legend-swatch--preset-1 { background-color: var(--canvas-color-1, #e68619); }
-.ztb-legend-swatch--preset-2 { background-color: var(--canvas-color-2, #a855f7); }
-.ztb-legend-swatch--preset-3 { background-color: var(--canvas-color-3, #3b82f6); }
-.ztb-legend-swatch--preset-4 { background-color: var(--canvas-color-4, #eab308); }
-.ztb-legend-swatch--preset-5 { background-color: var(--canvas-color-5, #22c55e); }
-.ztb-legend-swatch--preset-6 { background-color: var(--canvas-color-6, #ef4444); }
+.ztb-legend-swatch--preset-1 { background-color: var(--canvas-color-1, #ef4444); }
+.ztb-legend-swatch--preset-2 { background-color: var(--canvas-color-2, #e68619); }
+.ztb-legend-swatch--preset-3 { background-color: var(--canvas-color-3, #eab308); }
+.ztb-legend-swatch--preset-4 { background-color: var(--canvas-color-4, #22c55e); }
+.ztb-legend-swatch--preset-5 { background-color: var(--canvas-color-5, #a855f7); }
+.ztb-legend-swatch--preset-6 { background-color: var(--canvas-color-6, #3b82f6); }
