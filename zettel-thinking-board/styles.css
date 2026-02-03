@@ -10,6 +10,40 @@
 	margin: var(--size-4-2) 0 var(--size-2-1);
 }
 
+/* Settings: collapsible model block (details/summary) */
+.ztb-model-block {
+	margin-bottom: var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-secondary-alt);
+}
+.ztb-model-block-summary {
+	padding: var(--size-2-1) var(--size-4-2);
+	cursor: pointer;
+	font-weight: 500;
+	color: var(--text-normal);
+	list-style: none;
+}
+.ztb-model-block-summary::-webkit-details-marker {
+	display: none;
+}
+.ztb-model-block-summary::before {
+	content: "▸ ";
+	display: inline-block;
+	width: 1em;
+	transition: transform 0.15s ease;
+}
+.ztb-model-block[open] .ztb-model-block-summary::before {
+	transform: rotate(90deg);
+}
+.ztb-model-block-content {
+	padding: 0 var(--size-4-2) var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+}
+.ztb-model-block-content .setting-item {
+	border: none;
+}
+
 .ztb-console {
 	background: var(--background-secondary);
 	border: 1px solid var(--background-modifier-border);

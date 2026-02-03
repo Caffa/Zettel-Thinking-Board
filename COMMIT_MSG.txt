@@ -1,0 +1,39 @@
+Refactor settings: collapsible model blocks, UX philosophy, unique color alert
+
+Settings UI/UX overhaul so each model is configured in one place and node
+colors stay one-to-one.
+
+What changed
+------------
+- Execution: Each of Primary / Secondary / Tertiary is a single collapsible
+  block (<details>) containing Model (dropdown or text), Label, and Color.
+  Primary is expanded by default; secondary and tertiary start collapsed.
+  Summary line updates when model or label changes (e.g. "Primary model —
+  llama2") so users can scan without opening.
+- Display: Renamed from "Node colors". Now only Python, Comment, and Output
+  colors plus "Show role labels"; model colors live inside each model block.
+  Added a short hint that each node type should have a unique color.
+- Color conflict: When the user picks a color already used by another node
+  type, an alert explains that each type should have a unique color. Helper
+  getOtherRoleWithColor() and ROLE_DISPLAY_NAMES support the message.
+- README: New "Settings and UX" section describing grouping by concept,
+  progressive disclosure, execution-first order, and one-to-one colors.
+
+Philosophy (documented in code and README)
+------------------------------------------
+- Group by concept, not by control type: one place per model (model + label
+  + color).
+- Progressive disclosure: collapsible blocks; primary visible by default.
+- Summary shows current choice when collapsed for quick scanning.
+- Execution first (what runs), then Display (how it looks for non-model
+  nodes and labels).
+- One-to-one color mapping: no two node types share a color; alert on
+  conflict so the canvas stays easy to read.
+
+Technical
+---------
+- addModelBlock() builds one collapsible block; addColorSetting() now
+  calls checkColorConflict() after dropdown/hex change.
+- COLOR_ROLES and getOtherRoleWithColor() for conflict detection.
+- CSS: .ztb-model-block, .ztb-model-block-summary, .ztb-model-block-content
+  (arrow rotation when open).

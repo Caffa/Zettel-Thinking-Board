@@ -70,6 +70,15 @@ By default, all parent outputs are concatenated and passed to the child. You can
 
 Example: Orange → Purple with edge label `draft`. In the Purple note: "Critique this draft:\n\n{{var:draft}}\n\nBe concise." Only the draft is injected; no extra concatenation.
 
+## ⚙️ Settings and UX
+
+The plugin settings are organized so that each **model** (primary, secondary, tertiary) is configured in one place:
+
+- **Group by concept:** For each model you set the Ollama model, optional canvas label, and node color in a single collapsible block—no jumping between "Execution" and "Node colors."
+- **Progressive disclosure:** The primary model block is expanded by default; secondary and tertiary can stay collapsed. The block summary shows the current choice (e.g. "Primary model — llama2") so you can scan without opening.
+- **Execution first, then display:** Settings are ordered as: what runs (models + Python path), then how it looks (colors for Python / Comment / Output nodes and the "Show role labels" toggle).
+- **One-to-one colors:** Each node type should have a unique color. If you assign a color that another type already uses, an alert reminds you so the canvas stays easy to read.
+
 ## ⚙️ Advanced: Python State
 The Python kernel stays alive as long as Obsidian is open (or until you click "Restart Kernel").
 

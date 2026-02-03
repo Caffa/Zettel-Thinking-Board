@@ -8,9 +8,10 @@ export type NodeRole = "red" | "orange" | "purple" | "blue" | "yellow" | "green"
 
 /** Default label for each role when no model name is set. */
 export const ROLE_LABELS: Record<NodeRole, string> = {
-	red: "Model (tertiary)",
 	orange: "Model (primary)",
 	purple: "Model (secondary)",
+	red: "Model (tertiary)",
+
 	blue: "Python",
 	yellow: "Comment",
 	green: "Output",
@@ -18,6 +19,34 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 
 /** Model roles that use an Ollama model and support an optional custom label. */
 const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red"];
+
+/** All roles that have a configurable node color (for conflict checks). */
+const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "blue", "yellow", "green"];
+
+/** Human-readable names for conflict alerts (one-to-one color mapping). */
+const ROLE_DISPLAY_NAMES: Record<NodeRole, string> = {
+	orange: "Primary model",
+	purple: "Secondary model",
+	red: "Tertiary model",
+	blue: "Python node",
+	yellow: "Comment node",
+	green: "Output node",
+};
+
+/** Returns another role that already uses this color value, or null if unique. */
+function getOtherRoleWithColor(
+	settings: ZettelPluginSettings,
+	colorValue: string,
+	excludeRole: NodeRole
+): NodeRole | null {
+	if (!colorValue) return null;
+	for (const r of COLOR_ROLES) {
+		if (r === excludeRole) continue;
+		const key = `color${r.charAt(0).toUpperCase() + r.slice(1)}` as keyof ZettelPluginSettings;
+		if ((settings[key] as string) === colorValue) return r;
+	}
+	return null;
+}
 
 function getModelName(role: NodeRole, settings: ZettelPluginSettings): string {
 	if (role === "orange") return (settings.ollamaOrangeModel || "").trim();
@@ -125,6 +154,94 @@ const PRESET_COLORS: { value: CanvasColor; label: string }[] = [
 
 const PRESET_SWATCH_CLASS = "ztb-color-swatch--preset-";
 
+/** Role to human-readable block title for settings. */
+const MODEL_BLOCK_TITLES: Record<"orange" | "purple" | "red", string> = {
+	orange: "Primary model",
+	purple: "Secondary model",
+	red: "Tertiary model",
+};
+
+/**
+ * Build one collapsible model block: summary (e.g. "Primary model — llama2") and content (model picker, label, color).
+ * Uses native <details> for accessible expand/collapse. Summary text updates when model or label changes.
+ */
+function addModelBlock(
+	containerEl: HTMLElement,
+	role: "orange" | "purple" | "red",
+	models: string[] | null,
+	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> }
+): void {
+	const s = plugin.settings;
+	const title = MODEL_BLOCK_TITLES[role];
+	const details = containerEl.createEl("details", { cls: "ztb-model-block" });
+	// Primary expanded by default; secondary and tertiary collapsed to reduce scroll
+	details.open = role === "orange";
+
+	const summary = details.createEl("summary", { cls: "ztb-model-block-summary" });
+	const content = details.createDiv({ cls: "ztb-model-block-content" });
+
+	const modelKey = role === "orange" ? "ollamaOrangeModel" : role === "purple" ? "ollamaPurpleModel" : "ollamaRedModel";
+	const labelKey = role === "orange" ? "modelLabelOrange" : role === "purple" ? "modelLabelPurple" : "modelLabelRed";
+
+	function updateSummaryText(): void {
+		const name = (plugin.settings[modelKey] as string)?.trim() || "";
+		const label = (plugin.settings[labelKey] as string)?.trim() || "";
+		const part = label ? `${label}: ${name || "(no model)"}` : name || "(no model selected)";
+		summary.setText(`${title} — ${part}`);
+	}
+
+	if (models && models.length > 0) {
+		new Setting(content)
+			.setName("Model")
+			.setDesc("Ollama model used when you run this model node")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", "— Select model —");
+				for (const name of models) dropdown.addOption(name, name);
+				const current = (s[modelKey] as string) || "";
+				dropdown.setValue(current && models.includes(current) ? current : "");
+				dropdown.onChange(async (value) => {
+					(plugin.settings as unknown as Record<string, string>)[modelKey] = value;
+					updateSummaryText();
+					await plugin.saveSettings();
+				});
+			});
+	} else {
+		new Setting(content)
+			.setName("Model")
+			.setDesc("Ollama model name (e.g. llama2, mistral). Enter manually if Ollama is not reachable.")
+			.addText((text) => text
+				.setPlaceholder("e.g. llama2")
+				.setValue((s[modelKey] as string) || "")
+				.onChange(async (value) => {
+					(plugin.settings as unknown as Record<string, string>)[modelKey] = value;
+					updateSummaryText();
+					await plugin.saveSettings();
+				}));
+	}
+
+	new Setting(content)
+		.setName("Label")
+		.setDesc("Optional label on the canvas (e.g. quick, big); model name is shown after it")
+		.addText((text) => text
+			.setPlaceholder("e.g. quick")
+			.setValue((s[labelKey] as string) || "")
+			.onChange(async (value) => {
+				(plugin.settings as unknown as Record<string, string>)[labelKey] = value;
+				updateSummaryText();
+				await plugin.saveSettings();
+			}));
+
+	addColorSetting(
+		content,
+		plugin,
+		role,
+		"Color",
+		"Node color on the canvas"
+	);
+
+	updateSummaryText();
+}
+
 function setSwatchToPreset(swatch: HTMLElement, presetValue: string): void {
 	for (let i = 1; i <= 6; i++) swatch.classList.remove(PRESET_SWATCH_CLASS + i);
 	swatch.style.backgroundColor = getPresetColor(Number(presetValue) as 1 | 2 | 3 | 4 | 5 | 6);
@@ -183,13 +300,23 @@ function addColorSetting(
 			swatch.setAttr("title", PRESET_COLORS.find((x) => x.value === v)?.label ?? "Preset");
 		}
 	};
+	function checkColorConflict(newColorValue: string): void {
+		const other = getOtherRoleWithColor(plugin.settings, newColorValue, role);
+		if (other) {
+			const otherName = ROLE_DISPLAY_NAMES[other];
+			alert(`This color is already used by "${otherName}". Each node type should have a unique color so nodes are easy to tell apart on the canvas.`);
+		}
+	}
+
 	dropdown.addEventListener("change", () => {
 		const v = dropdown.value;
 		customHex.style.display = v === "custom" ? "inline-block" : "none";
 		if (v === "custom") {
 			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = customHex.value.trim() || "#000000";
+			checkColorConflict(customHex.value.trim() || "#000000");
 		} else {
 			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = v;
+			checkColorConflict(v);
 		}
 		updateSwatch();
 		plugin.saveSettings();
@@ -209,6 +336,7 @@ function addColorSetting(
 		if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
 			(plugin.settings as unknown as Record<string, CanvasColor>)[key] = hex;
 			swatch.style.backgroundColor = hex;
+			checkColorConflict(hex);
 			plugin.saveSettings();
 		}
 	});
@@ -227,11 +355,19 @@ export class ZettelSettingTab extends PluginSettingTab {
 		containerEl.empty();
 		const s = this.plugin.settings;
 
-		// How to run: one-line hint (per UX suggestion)
+		/*
+		 * UX philosophy for this tab:
+		 * - Group by concept, not by control type: each "model" is one place (model + label + color).
+		 * - Progressive disclosure: collapsible blocks so primary is visible by default; secondary/tertiary can stay collapsed.
+		 * - Summary shows current choice when collapsed (e.g. "Primary model — llama2") so users can scan without expanding.
+		 * - Execution first (what runs), then Display (how it looks for non-model nodes and labels).
+		 */
+
+		// How to run: one-line hint
 		const hint = containerEl.createDiv({ cls: "ztb-settings-hint setting-item-description" });
 		hint.setText("Right-click a node on the canvas and choose Run node or Run chain.");
 
-		// Execution: what runs (primary model, secondary model, Python path)
+		// Execution: model blocks (each: model + label + color) then Python
 		const executionSection = containerEl.createDiv({ cls: "ztb-settings-section" });
 		executionSection.createEl("h4", { text: "Execution", cls: "ztb-section-title" });
 		const ollamaContainer = executionSection.createDiv({ cls: "ztb-ollama-settings" });
@@ -243,134 +379,11 @@ export class ZettelSettingTab extends PluginSettingTab {
 			if (models.length === 0) {
 				const fallback = ollamaContainer.createDiv({ cls: "ztb-ollama-fallback" });
 				fallback.createEl("p", { text: "Ollama not reachable or no models. Enter model names manually." });
-				new Setting(ollamaContainer)
-					.setName("Model node (primary)")
-					.setDesc("Ollama model used when you run a primary model node (e.g. llama2)")
-					.addText((text) => text
-						.setPlaceholder("e.g. llama2")
-						.setValue(s.ollamaOrangeModel)
-						.onChange(async (value) => {
-							this.plugin.settings.ollamaOrangeModel = value;
-							await this.plugin.saveSettings();
-						}));
-				new Setting(ollamaContainer)
-					.setName("Label (primary)")
-					.setDesc("Optional label prepended on canvas (e.g. quick, big); model name is shown after it")
-					.addText((text) => text
-						.setPlaceholder("e.g. quick")
-						.setValue(s.modelLabelOrange)
-						.onChange(async (value) => {
-							this.plugin.settings.modelLabelOrange = value;
-							await this.plugin.saveSettings();
-						}));
-				new Setting(ollamaContainer)
-					.setName("Model node (secondary)")
-					.setDesc("Ollama model used when you run a secondary model node")
-					.addText((text) => text
-						.setPlaceholder("e.g. mistral")
-						.setValue(s.ollamaPurpleModel)
-						.onChange(async (value) => {
-							s.ollamaPurpleModel = value;
-							await this.plugin.saveSettings();
-						}));
-				new Setting(ollamaContainer)
-					.setName("Label (secondary)")
-					.setDesc("Optional label prepended on canvas (e.g. quick, big)")
-					.addText((text) => text
-						.setPlaceholder("e.g. big")
-						.setValue(s.modelLabelPurple)
-						.onChange(async (value) => {
-							this.plugin.settings.modelLabelPurple = value;
-							await this.plugin.saveSettings();
-						}));
-				new Setting(ollamaContainer)
-					.setName("Model node (tertiary)")
-					.setDesc("Ollama model used when you run a tertiary model node")
-					.addText((text) => text
-						.setPlaceholder("e.g. phi")
-						.setValue(s.ollamaRedModel)
-						.onChange(async (value) => {
-							this.plugin.settings.ollamaRedModel = value;
-							await this.plugin.saveSettings();
-						}));
-				new Setting(ollamaContainer)
-					.setName("Label (tertiary)")
-					.setDesc("Optional label prepended on canvas (e.g. quick, big)")
-					.addText((text) => text
-						.setPlaceholder("e.g. tiny")
-						.setValue(s.modelLabelRed)
-						.onChange(async (value) => {
-							this.plugin.settings.modelLabelRed = value;
-							await this.plugin.saveSettings();
-						}));
-				return;
 			}
-			new Setting(ollamaContainer)
-				.setName("Model node (primary)")
-				.setDesc("Ollama model used when you run a primary model node")
-				.addDropdown((dropdown) => {
-					dropdown.addOption("", "— Select model —");
-					for (const name of models) dropdown.addOption(name, name);
-					dropdown.setValue(s.ollamaOrangeModel && models.includes(s.ollamaOrangeModel) ? s.ollamaOrangeModel : "");
-					dropdown.onChange(async (value) => {
-						this.plugin.settings.ollamaOrangeModel = value;
-						await this.plugin.saveSettings();
-					});
-				});
-			new Setting(ollamaContainer)
-				.setName("Label (primary)")
-				.setDesc("Optional label prepended on canvas (e.g. quick, big); model name is shown after it")
-				.addText((text) => text
-					.setPlaceholder("e.g. quick")
-					.setValue(s.modelLabelOrange)
-					.onChange(async (value) => {
-						this.plugin.settings.modelLabelOrange = value;
-						await this.plugin.saveSettings();
-					}));
-			new Setting(ollamaContainer)
-				.setName("Model node (secondary)")
-				.setDesc("Ollama model used when you run a secondary model node")
-				.addDropdown((dropdown) => {
-					dropdown.addOption("", "— Select model —");
-					for (const name of models) dropdown.addOption(name, name);
-					dropdown.setValue(s.ollamaPurpleModel && models.includes(s.ollamaPurpleModel) ? s.ollamaPurpleModel : "");
-					dropdown.onChange(async (value) => {
-						s.ollamaPurpleModel = value;
-						await this.plugin.saveSettings();
-					});
-				});
-			new Setting(ollamaContainer)
-				.setName("Label (secondary)")
-				.setDesc("Optional label prepended on canvas (e.g. quick, big)")
-				.addText((text) => text
-					.setPlaceholder("e.g. big")
-					.setValue(s.modelLabelPurple)
-					.onChange(async (value) => {
-						this.plugin.settings.modelLabelPurple = value;
-						await this.plugin.saveSettings();
-					}));
-			new Setting(ollamaContainer)
-				.setName("Model node (tertiary)")
-				.setDesc("Ollama model used when you run a tertiary model node")
-				.addDropdown((dropdown) => {
-					dropdown.addOption("", "— Select model —");
-					for (const name of models) dropdown.addOption(name, name);
-					dropdown.setValue(s.ollamaRedModel && models.includes(s.ollamaRedModel) ? s.ollamaRedModel : "");
-					dropdown.onChange(async (value) => {
-						this.plugin.settings.ollamaRedModel = value;
-						await this.plugin.saveSettings();
-					});
-				});
-			new Setting(ollamaContainer)
-				.setName("Label (tertiary)")
-				.setDesc("Optional label prepended on canvas (e.g. quick, big)")
-				.addText((text) => text
-					.setPlaceholder("e.g. tiny")
-					.setValue(s.modelLabelRed)
-					.onChange(async (value) => {
-						this.plugin.settings.modelLabelRed = value;
-						await this.plugin.saveSettings();
-					}));
+			// One collapsible block per model role: primary (expanded), secondary and tertiary (collapsed)
+			addModelBlock(ollamaContainer, "orange", models.length === 0 ? null : models, this.plugin);
+			addModelBlock(ollamaContainer, "purple", models.length === 0 ? null : models, this.plugin);
+			addModelBlock(ollamaContainer, "red", models.length === 0 ? null : models, this.plugin);
 		})();
 
 		new Setting(executionSection)
@@ -384,53 +397,34 @@ export class ZettelSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		// Node colors: how it looks (role-first labels, effect-focused descriptions)
-		const colorsSection = containerEl.createDiv({ cls: "ztb-settings-section" });
-		colorsSection.createEl("h4", { text: "Node colors", cls: "ztb-section-title" });
+		// Display: colors for non-model nodes and label visibility (model colors live inside each model block)
+		const displaySection = containerEl.createDiv({ cls: "ztb-settings-section" });
+		displaySection.createEl("h4", { text: "Display", cls: "ztb-section-title" });
+		const displayHint = displaySection.createDiv({ cls: "ztb-settings-hint setting-item-description" });
+		displayHint.setText("Each node type should have a unique color so nodes are easy to tell apart on the canvas. Choosing a color already used by another type will show an alert.");
 		addColorSetting(
-			colorsSection,
-			this.plugin,
-			"red",
-			"Model node (tertiary)",
-			"Color for the tertiary model node on the canvas"
-		);
-		addColorSetting(
-			colorsSection,
-			this.plugin,
-			"orange",
-			"Model node (primary)",
-			"Color for the primary model node on the canvas"
-		);
-		addColorSetting(
-			colorsSection,
-			this.plugin,
-			"purple",
-			"Model node (secondary)",
-			"Color for the secondary model node on the canvas"
-		);
-		addColorSetting(
-			colorsSection,
+			displaySection,
 			this.plugin,
 			"blue",
 			"Python node",
 			"Color for the Python node on the canvas"
 		);
 		addColorSetting(
-			colorsSection,
+			displaySection,
 			this.plugin,
 			"yellow",
 			"Comment node",
 			"Color for the comment (pass-through) node on the canvas"
 		);
 		addColorSetting(
-			colorsSection,
+			displaySection,
 			this.plugin,
 			"green",
 			"Output node",
 			"Color for auto-generated output nodes on the canvas"
 		);
 
-		new Setting(colorsSection)
+		new Setting(displaySection)
 			.setName("Show role labels on canvas")
 			.setDesc("Show a floating label above each node (e.g. Comment, Python) based on its color")
 			.addToggle((toggle) => toggle
