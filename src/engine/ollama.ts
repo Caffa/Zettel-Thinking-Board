@@ -21,7 +21,6 @@ export async function fetchOllamaModels(): Promise<string[]> {
 /** Runtime options for Ollama /api/generate (sent under the "options" key). */
 export interface OllamaGenerateRequestOptions {
 	temperature?: number;
-	num_predict?: number;
 	top_p?: number;
 }
 

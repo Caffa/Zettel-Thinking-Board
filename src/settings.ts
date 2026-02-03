@@ -85,9 +85,6 @@ export interface ZettelPluginSettings {
 	ollamaOrangeTemperature: number;
 	ollamaPurpleTemperature: number;
 	ollamaRedTemperature: number;
-	ollamaOrangeNumPredict: number;
-	ollamaPurpleNumPredict: number;
-	ollamaRedNumPredict: number;
 	colorRed: CanvasColor;
 	colorOrange: CanvasColor;
 	colorPurple: CanvasColor;
@@ -108,9 +105,6 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	ollamaOrangeTemperature: 0.8,
 	ollamaPurpleTemperature: 0.8,
 	ollamaRedTemperature: 0.8,
-	ollamaOrangeNumPredict: -1,
-	ollamaPurpleNumPredict: -1,
-	ollamaRedNumPredict: -1,
 	colorRed: "5",
 	colorOrange: "1",
 	colorPurple: "2",
@@ -195,7 +189,6 @@ function addModelBlock(
 	const modelKey = role === "orange" ? "ollamaOrangeModel" : role === "purple" ? "ollamaPurpleModel" : "ollamaRedModel";
 	const labelKey = role === "orange" ? "modelLabelOrange" : role === "purple" ? "modelLabelPurple" : "modelLabelRed";
 	const temperatureKey = role === "orange" ? "ollamaOrangeTemperature" : role === "purple" ? "ollamaPurpleTemperature" : "ollamaRedTemperature";
-	const numPredictKey = role === "orange" ? "ollamaOrangeNumPredict" : role === "purple" ? "ollamaPurpleNumPredict" : "ollamaRedNumPredict";
 
 	function updateSummaryText(): void {
 		const name = (plugin.settings[modelKey] as string)?.trim() || "";
@@ -254,20 +247,6 @@ function addModelBlock(
 			.onChange(async (value) => {
 				(plugin.settings as unknown as Record<string, number>)[temperatureKey] = value;
 				await plugin.saveSettings();
-			}));
-
-	new Setting(content)
-		.setName("Max tokens")
-		.setDesc("Max tokens to generate (-1 = no limit).")
-		.addText((text) => text
-			.setPlaceholder("-1")
-			.setValue(String(s[numPredictKey] ?? DEFAULT_SETTINGS[numPredictKey]))
-			.onChange(async (value) => {
-				const num = parseInt(value, 10);
-				if (!Number.isNaN(num) && num >= -1) {
-					(plugin.settings as unknown as Record<string, number>)[numPredictKey] = num;
-					await plugin.saveSettings();
-				}
 			}));
 
 	addColorSetting(

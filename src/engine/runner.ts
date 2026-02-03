@@ -257,12 +257,11 @@ async function runSingleNode(
 	if (role === "orange") {
 		const model = settings.ollamaOrangeModel || "llama2";
 		const temperature = settings.ollamaOrangeTemperature ?? DEFAULT_SETTINGS.ollamaOrangeTemperature;
-		const num_predict = settings.ollamaOrangeNumPredict ?? DEFAULT_SETTINGS.ollamaOrangeNumPredict;
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
-			options: { temperature, num_predict },
+			options: { temperature },
 		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
@@ -272,12 +271,11 @@ async function runSingleNode(
 	if (role === "purple") {
 		const model = settings.ollamaPurpleModel || "llama2";
 		const temperature = settings.ollamaPurpleTemperature ?? DEFAULT_SETTINGS.ollamaPurpleTemperature;
-		const num_predict = settings.ollamaPurpleNumPredict ?? DEFAULT_SETTINGS.ollamaPurpleNumPredict;
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
-			options: { temperature, num_predict },
+			options: { temperature },
 		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
@@ -287,12 +285,11 @@ async function runSingleNode(
 	if (role === "red") {
 		const model = settings.ollamaRedModel || "llama2";
 		const temperature = settings.ollamaRedTemperature ?? DEFAULT_SETTINGS.ollamaRedTemperature;
-		const num_predict = settings.ollamaRedNumPredict ?? DEFAULT_SETTINGS.ollamaRedNumPredict;
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
-			options: { temperature, num_predict },
+			options: { temperature },
 		});
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);

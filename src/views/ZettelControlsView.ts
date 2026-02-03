@@ -1,12 +1,27 @@
 import {ItemView, Notice, Setting, WorkspaceLeaf} from "obsidian";
 import type {IZettelThinkingBoardPlugin} from "../types";
 import {terminateKernel} from "../engine/kernelManager";
-import {DEFAULT_SETTINGS} from "../settings";
+import {fetchOllamaModels} from "../engine/ollama";
+import {DEFAULT_SETTINGS, getPresetColor} from "../settings";
+import type {CanvasColor} from "../settings";
 
 export const ZETTEL_CONTROLS_VIEW_TYPE = "zettel-controls";
 
 /** In-memory env vars (not persisted). */
 const envVars: Record<string, string> = {};
+
+/** Resolve canvas color setting to a CSS value for swatch background. */
+function resolveColorValue(value: CanvasColor): string {
+	const v = (value ?? "").toString().trim();
+	if (/^[1-6]$/.test(v)) return getPresetColor(Number(v) as 1 | 2 | 3 | 4 | 5 | 6);
+	return v || "#888";
+}
+
+const MODEL_GROUP_TITLES: Record<"orange" | "purple" | "red", string> = {
+	orange: "Primary model",
+	purple: "Secondary model",
+	red: "Tertiary model",
+};
 
 export class ZettelControlsView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, public readonly plugin: IZettelThinkingBoardPlugin) {
@@ -26,115 +41,84 @@ export class ZettelControlsView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		const el = this.containerEl.createDiv({ cls: "ztb-controls-container" });
+		this.containerEl.addClass("ztb-controls-view");
+		// Clear pre-existing children so our content is the only child and receives layout
+		this.containerEl.empty();
+		const scrollWrap = this.containerEl.createDiv({ cls: "ztb-controls-view-content" });
+		const el = scrollWrap.createDiv({ cls: "ztb-controls-container" });
 
-		// Model mapping (persisted; same as settings)
+		// Model mapping (persisted; same as settings) — one grouped block per model
 		el.createEl("h4", { text: "Model mapping", cls: "ztb-section-title" });
-		new Setting(el)
-			.setName("Model node (primary)")
-			.setDesc("Ollama model for primary model nodes")
-			.addText((text) =>
-				text
-					.setPlaceholder("e.g. llama2")
-					.setValue(this.plugin.settings.ollamaOrangeModel)
+		const modelGroupsContainer = el.createDiv({ cls: "ztb-controls-model-groups" });
+		const loadingEl = modelGroupsContainer.createDiv({ cls: "ztb-ollama-loading" });
+		loadingEl.setText("Loading Ollama models…");
+
+		const addModelGroup = (
+			parent: HTMLElement,
+			role: "orange" | "purple" | "red",
+			modelKey: "ollamaOrangeModel" | "ollamaPurpleModel" | "ollamaRedModel",
+			temperatureKey: "ollamaOrangeTemperature" | "ollamaPurpleTemperature" | "ollamaRedTemperature",
+			colorKey: "colorOrange" | "colorPurple" | "colorRed",
+			models: string[] | null
+		) => {
+			const group = parent.createDiv({ cls: "ztb-controls-model-group" });
+			const header = group.createDiv({ cls: "ztb-controls-model-group-header" });
+			const title = header.createSpan({ cls: "ztb-controls-model-group-title", text: MODEL_GROUP_TITLES[role] });
+			const swatch = header.createSpan({ cls: "ztb-color-swatch ztb-controls-model-swatch" });
+			swatch.style.backgroundColor = resolveColorValue(this.plugin.settings[colorKey] as CanvasColor);
+
+			const currentModel = this.plugin.settings[modelKey] ?? "";
+			if (models && models.length > 0) {
+				new Setting(group)
+					.setName("Model")
+					.setDesc("Ollama model for this model node")
+					.addDropdown((dropdown) => {
+						dropdown.addOption("", "— Select model —");
+						for (const name of models) dropdown.addOption(name, name);
+						dropdown.setValue(currentModel && models.includes(currentModel) ? currentModel : "");
+						dropdown.onChange(async (value) => {
+							this.plugin.settings[modelKey] = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			} else {
+				new Setting(group)
+					.setName("Model")
+					.setDesc("Ollama model name (e.g. llama2). Enter manually if Ollama is not reachable.")
+					.addText((text) =>
+						text
+							.setPlaceholder("e.g. llama2")
+							.setValue(currentModel)
+							.onChange(async (value) => {
+								this.plugin.settings[modelKey] = value;
+								await this.plugin.saveSettings();
+							})
+					);
+			}
+			const tempVal = Number(this.plugin.settings[temperatureKey]) ?? DEFAULT_SETTINGS[temperatureKey];
+			const tempSetting = new Setting(group)
+				.setName("Temperature")
+				.setDesc("Higher = more creative, lower = more deterministic (0–2).")
+				.addSlider((slider) => slider
+					.setLimits(0, 2, 0.1)
+					.setValue(tempVal)
 					.onChange(async (value) => {
-						this.plugin.settings.ollamaOrangeModel = value;
+						this.plugin.settings[temperatureKey] = value;
+						tempValueSpan.setText(String(value));
 						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(el)
-			.setName("Temperature (primary)")
-			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
-			.addSlider((slider) => slider
-				.setLimits(0, 2, 0.1)
-				.setValue(Number(this.plugin.settings.ollamaOrangeTemperature) ?? DEFAULT_SETTINGS.ollamaOrangeTemperature)
-				.onChange(async (value) => {
-					this.plugin.settings.ollamaOrangeTemperature = value;
-					await this.plugin.saveSettings();
-				}));
-		new Setting(el)
-			.setName("Max tokens (primary)")
-			.setDesc("Max tokens to generate (-1 = no limit).")
-			.addText((text) => text
-				.setPlaceholder("-1")
-				.setValue(String(this.plugin.settings.ollamaOrangeNumPredict ?? DEFAULT_SETTINGS.ollamaOrangeNumPredict))
-				.onChange(async (value) => {
-					const num = parseInt(value, 10);
-					if (!Number.isNaN(num) && num >= -1) {
-						this.plugin.settings.ollamaOrangeNumPredict = num;
-						await this.plugin.saveSettings();
-					}
-				}));
-		new Setting(el)
-			.setName("Model node (secondary)")
-			.setDesc("Ollama model for secondary model nodes")
-			.addText((text) =>
-				text
-					.setPlaceholder("e.g. mistral")
-					.setValue(this.plugin.settings.ollamaPurpleModel)
-					.onChange(async (value) => {
-						this.plugin.settings.ollamaPurpleModel = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(el)
-			.setName("Temperature (secondary)")
-			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
-			.addSlider((slider) => slider
-				.setLimits(0, 2, 0.1)
-				.setValue(Number(this.plugin.settings.ollamaPurpleTemperature) ?? DEFAULT_SETTINGS.ollamaPurpleTemperature)
-				.onChange(async (value) => {
-					this.plugin.settings.ollamaPurpleTemperature = value;
-					await this.plugin.saveSettings();
-				}));
-		new Setting(el)
-			.setName("Max tokens (secondary)")
-			.setDesc("Max tokens to generate (-1 = no limit).")
-			.addText((text) => text
-				.setPlaceholder("-1")
-				.setValue(String(this.plugin.settings.ollamaPurpleNumPredict ?? DEFAULT_SETTINGS.ollamaPurpleNumPredict))
-				.onChange(async (value) => {
-					const num = parseInt(value, 10);
-					if (!Number.isNaN(num) && num >= -1) {
-						this.plugin.settings.ollamaPurpleNumPredict = num;
-						await this.plugin.saveSettings();
-					}
-				}));
-		new Setting(el)
-			.setName("Model node (tertiary)")
-			.setDesc("Ollama model for tertiary model nodes")
-			.addText((text) =>
-				text
-					.setPlaceholder("e.g. phi")
-					.setValue(this.plugin.settings.ollamaRedModel)
-					.onChange(async (value) => {
-						this.plugin.settings.ollamaRedModel = value;
-						await this.plugin.saveSettings();
-					})
-			);
-		new Setting(el)
-			.setName("Temperature (tertiary)")
-			.setDesc("Higher = more creative, lower = more deterministic (0–2).")
-			.addSlider((slider) => slider
-				.setLimits(0, 2, 0.1)
-				.setValue(Number(this.plugin.settings.ollamaRedTemperature) ?? DEFAULT_SETTINGS.ollamaRedTemperature)
-				.onChange(async (value) => {
-					this.plugin.settings.ollamaRedTemperature = value;
-					await this.plugin.saveSettings();
-				}));
-		new Setting(el)
-			.setName("Max tokens (tertiary)")
-			.setDesc("Max tokens to generate (-1 = no limit).")
-			.addText((text) => text
-				.setPlaceholder("-1")
-				.setValue(String(this.plugin.settings.ollamaRedNumPredict ?? DEFAULT_SETTINGS.ollamaRedNumPredict))
-				.onChange(async (value) => {
-					const num = parseInt(value, 10);
-					if (!Number.isNaN(num) && num >= -1) {
-						this.plugin.settings.ollamaRedNumPredict = num;
-						await this.plugin.saveSettings();
-					}
-				}));
+					}));
+			const tempDisplay = tempSetting.controlEl.createSpan({ cls: "ztb-controls-temp-display" });
+			tempDisplay.createSpan({ text: "Current: " });
+			const tempValueSpan = tempDisplay.createSpan({ cls: "ztb-controls-temp-value", text: String(tempVal) });
+		};
+
+		(async () => {
+			const models = await fetchOllamaModels();
+			loadingEl.remove();
+			addModelGroup(modelGroupsContainer, "orange", "ollamaOrangeModel", "ollamaOrangeTemperature", "colorOrange", models.length > 0 ? models : null);
+			addModelGroup(modelGroupsContainer, "purple", "ollamaPurpleModel", "ollamaPurpleTemperature", "colorPurple", models.length > 0 ? models : null);
+			addModelGroup(modelGroupsContainer, "red", "ollamaRedModel", "ollamaRedTemperature", "colorRed", models.length > 0 ? models : null);
+		})();
 
 		// Kernel controls
 		el.createEl("h4", { text: "Kernel controls", cls: "ztb-section-title" });
@@ -184,6 +168,8 @@ export class ZettelControlsView extends ItemView {
 
 		// Console (obsidian_log output)
 		el.createEl("h4", { text: "Console", cls: "ztb-section-title" });
+		const consoleTip = el.createEl("p", { cls: "ztb-controls-tip" });
+		consoleTip.setText("In Python cards, call obsidian_log('your message') to see output here.");
 		const consoleEl = el.createDiv({ cls: "ztb-console" });
 		const appendLog = (line: string) => {
 			const p = consoleEl.createEl("p", { cls: "ztb-console-line" });
@@ -201,9 +187,28 @@ export class ZettelControlsView extends ItemView {
 		this.plugin.registerEvent(
 			this.plugin.app.workspace.on("active-leaf-change", wireKernelLog)
 		);
+
+		// Guide tips (features that are not immediately obvious)
+		el.createEl("h4", { text: "Guide tips", cls: "ztb-section-title" });
+		const guideDetails = el.createEl("details", { cls: "ztb-guide-details" });
+		guideDetails.createEl("summary", { cls: "ztb-guide-summary", text: "How to use the canvas" });
+		const guideList = guideDetails.createEl("ul", { cls: "ztb-guide-list" });
+		const tips = [
+			"Each color is a different way to work with text: one color might ask an AI a question, another might run a short Python snippet, and the green card is where the result shows up.",
+			"An arrow from one card to another sends its text as input. You can change how it's combined by clicking the arrow's label.",
+			"Right-click a card and choose Run node to run just that card, or Run chain to run it and every card that feeds into it.",
+			"The green card is where answers and results appear. It gets created or updated when you run an AI or Python card.",
+			"You can plug text from one card into another by using {{var:name}} in the card text and giving the edge that variable name as its label.",
+			"Use the command \"Create tutorial canvas\" for a full showcase: every node type, concat vs variable injection, Run buttons, and this sidebar.",
+		];
+		for (const tip of tips) {
+			const li = guideList.createEl("li");
+			li.setText(tip);
+		}
 	}
 
 	async onClose(): Promise<void> {
+		this.containerEl.removeClass("ztb-controls-view");
 		this.containerEl.empty();
 	}
 }
