@@ -444,6 +444,10 @@ const OUTPUT_COLLISION_MAX_VERTICAL = 400;
 const OUTPUT_COLLISION_VERTICAL_STEP = 60;
 /** Min gap (px) between output box and other nodes; placement avoids coming within this distance. */
 const OUTPUT_COLLISION_BUFFER = 24;
+/** Step (px) between candidate positions for auxiliary (thinking) node collision avoidance. */
+const AUXILIARY_COLLISION_STEP = 60;
+/** Max radius (px) from default when searching for a non-overlapping spot for the thinking node. */
+const AUXILIARY_COLLISION_MAX_RADIUS = 400;
 
 function rectanglesOverlap(
 	a: { x: number; y: number; width: number; height: number },
@@ -503,6 +507,57 @@ function* xOffsets(): Generator<number> {
 		yield offset;
 		yield -offset;
 	}
+}
+
+/** Yields (dx, dy) in ring order: (0,0) first, then ring at step, then 2*step, ... up to max radius. */
+function* auxiliaryPositionOffsets(): Generator<{ dx: number; dy: number }> {
+	yield { dx: 0, dy: 0 };
+	for (let r = AUXILIARY_COLLISION_STEP; r <= AUXILIARY_COLLISION_MAX_RADIUS; r += AUXILIARY_COLLISION_STEP) {
+		for (let dx = -r; dx <= r; dx += AUXILIARY_COLLISION_STEP) {
+			for (let dy = -r; dy <= r; dy += AUXILIARY_COLLISION_STEP) {
+				if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+				yield { dx, dy };
+			}
+		}
+	}
+}
+
+/** Choose (x, y) for the thinking node: prefers default (left of source), then tries positions in all directions to avoid overlap. */
+function chooseThinkingNodePositionXY(
+	data: CanvasData,
+	sourceNodeId: string,
+	thinkingNodeId: string | null,
+	defaultX: number,
+	defaultY: number,
+	width: number,
+	height: number,
+	extraExcludeIds: string[] = []
+): { x: number; y: number } {
+	const excludeIds = new Set<string>([sourceNodeId]);
+	if (thinkingNodeId) excludeIds.add(thinkingNodeId);
+	for (const id of extraExcludeIds) excludeIds.add(id);
+	const box = { x: 0, y: 0, width, height };
+	function tryPosition(x: number, y: number): boolean {
+		box.x = x;
+		box.y = y;
+		for (const node of data.nodes) {
+			if (excludeIds.has(node.id)) continue;
+			const expanded = {
+				x: node.x - OUTPUT_COLLISION_BUFFER,
+				y: node.y - OUTPUT_COLLISION_BUFFER,
+				width: node.width + 2 * OUTPUT_COLLISION_BUFFER,
+				height: node.height + 2 * OUTPUT_COLLISION_BUFFER,
+			};
+			if (rectanglesOverlap(box, expanded)) return false;
+		}
+		return true;
+	}
+	for (const { dx, dy } of auxiliaryPositionOffsets()) {
+		if (tryPosition(defaultX + dx, defaultY + dy)) {
+			return { x: defaultX + dx, y: defaultY + dy };
+		}
+	}
+	return { x: defaultX, y: defaultY };
 }
 
 /** Generate a unique id for new canvas nodes/edges. */
@@ -631,13 +686,14 @@ function ensureOutputNodeAndEdge(
 	// 2. Ensure thinking node (above output) when setting on and thinking present
 	if (settings.showThinkingNode && thinking != null && thinking.length > 0) {
 		const thinkingSide = chooseFreeSideForAuxiliaryEdge(data, sourceNode.id);
-		const thinkingDefaultY = outputY - height - GREEN_NODE_PADDING;
+		const thinkingDefaultX = sourceNode.x - width - GREEN_NODE_PADDING;
+		const thinkingDefaultY = sourceNode.y;
 		const thinkingExclude = [sourceNode.id, resolvedOutputId, promptId].filter((id): id is string => id != null);
-		const { x: tx, y: ty } = chooseOutputPositionXY(
+		const { x: tx, y: ty } = chooseThinkingNodePositionXY(
 			data,
 			sourceNode.id,
 			thinkingId,
-			defaultX,
+			thinkingDefaultX,
 			thinkingDefaultY,
 			width,
 			height,
