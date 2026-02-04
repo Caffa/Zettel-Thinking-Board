@@ -290,16 +290,8 @@ async function updateEdgeLabelsAndSave(
 	}
 	// Preserve user edits (e.g. node color) from live canvas before we overwrite with our data
 	const liveData = liveCanvas?.getData?.();
-	// #region agent log
-	const nodeBeforeMerge = getNodeById(data, nodeId);
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "before merge", data: { nodeId, nodeColorBefore: nodeBeforeMerge ? (nodeBeforeMerge as { color?: string }).color : undefined, hasGetData: typeof liveCanvas?.getData === "function", liveNodeCount: liveData?.nodes?.length }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "B" }) }).catch(() => {});
-	// #endregion
 	if (liveData?.nodes) {
 		mergePreserveUserNodeProps(data, liveData);
-		// #region agent log
-		const nodeAfterMerge = getNodeById(data, nodeId);
-		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "after merge", data: { nodeId, nodeColorAfter: nodeAfterMerge ? (nodeAfterMerge as { color?: string }).color : undefined }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "C" }) }).catch(() => {});
-		// #endregion
 	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
@@ -320,9 +312,6 @@ async function runSingleNode(
 ): Promise<string> {
 	const node = getNodeById(data, nodeId);
 	if (!node) return "";
-	// #region agent log
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runSingleNode", message: "entry node color from loaded data", data: { nodeId, nodeType: (node as { type?: string }).type, nodeColor: (node as { color?: string }).color }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "A" }) }).catch(() => {});
-	// #endregion
 	const role = getNodeRole(node, settings);
 	if (!role || role === "yellow" || role === "green") {
 		// Yellow = text (input pass-through): merge parent results with own content, same as AI/Python nodes
@@ -584,12 +573,11 @@ function ensureOutputNodeAndEdge(
 			(e) => e.fromNode === sourceNode.id && e.toNode === outId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT
 		);
 		if (!hasOutputEdge) {
-			data.edges.push({
-				id: randomId(),
-				fromNode: sourceNode.id,
-				toNode: outId,
-				label: EDGE_LABEL_OUTPUT,
-			});
+			const newEdge = { id: randomId(), fromNode: sourceNode.id, toNode: outId, label: EDGE_LABEL_OUTPUT };
+			data.edges.push(newEdge);
+			// #region agent log
+			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:ensureOutputNodeAndEdge", message: "output edge pushed (existing out)", data: { hasFromSide: "fromSide" in newEdge, hasToSide: "toSide" in newEdge, keys: Object.keys(newEdge) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "A" }) }).catch(() => {});
+			// #endregion
 		}
 	} else {
 		const newNodeId = randomId();
@@ -605,13 +593,18 @@ function ensureOutputNodeAndEdge(
 			color: greenColor,
 		};
 		data.nodes.push(newTextNode);
-		data.edges.push({
-			id: randomId(),
-			fromNode: sourceNode.id,
-			toNode: newNodeId,
-			label: EDGE_LABEL_OUTPUT,
-		});
+		const newEdge = { id: randomId(), fromNode: sourceNode.id, toNode: newNodeId, label: EDGE_LABEL_OUTPUT };
+		data.edges.push(newEdge);
+		// #region agent log
+		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:ensureOutputNodeAndEdge", message: "output edge pushed (new node)", data: { hasFromSide: "fromSide" in newEdge, hasToSide: "toSide" in newEdge, keys: Object.keys(newEdge) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "E" }) }).catch(() => {});
+		// #endregion
 	}
+	// #region agent log
+	const outEdgeAfterEnsure = data.edges.find((e) => e.fromNode === sourceNode.id && e.toNode === resolvedOutputId && parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT);
+	if (outEdgeAfterEnsure) {
+		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:ensureOutputNodeAndEdge", message: "output edge after ensure", data: { fromSide: (outEdgeAfterEnsure as { fromSide?: string }).fromSide, toSide: (outEdgeAfterEnsure as { toSide?: string }).toSide }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "A" }) }).catch(() => {});
+	}
+	// #endregion
 
 	const outputNode = getNodeById(data, resolvedOutputId);
 	const outputY = outputNode && "y" in outputNode ? (outputNode as { y: number }).y : chosenY;
