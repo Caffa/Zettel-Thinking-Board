@@ -26,6 +26,7 @@ import {
 	getCanvasKey,
 	getNodeResult,
 	setNodeResult,
+	setNodeDuration,
 	setEdgeModes,
 	setRunningNodeId,
 } from "./state";
@@ -355,12 +356,14 @@ async function runSingleNode(
 	if (role === "orange") {
 		const model = settings.ollamaOrangeModel || "llama2";
 		const temperature = settings.ollamaOrangeTemperature ?? DEFAULT_SETTINGS.ollamaOrangeTemperature;
+		const start = performance.now();
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
 			options: { temperature },
 		});
+		setNodeDuration(canvasKey, nodeId, performance.now() - start);
 		setNodeResult(canvasKey, nodeId, result.response);
 		ensureOutputNodeAndEdge(data, node, result.response, settings, {
 			fullPrompt,
@@ -372,12 +375,14 @@ async function runSingleNode(
 	if (role === "purple") {
 		const model = settings.ollamaPurpleModel || "llama2";
 		const temperature = settings.ollamaPurpleTemperature ?? DEFAULT_SETTINGS.ollamaPurpleTemperature;
+		const start = performance.now();
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
 			options: { temperature },
 		});
+		setNodeDuration(canvasKey, nodeId, performance.now() - start);
 		setNodeResult(canvasKey, nodeId, result.response);
 		ensureOutputNodeAndEdge(data, node, result.response, settings, {
 			fullPrompt,
@@ -389,12 +394,14 @@ async function runSingleNode(
 	if (role === "red") {
 		const model = settings.ollamaRedModel || "llama2";
 		const temperature = settings.ollamaRedTemperature ?? DEFAULT_SETTINGS.ollamaRedTemperature;
+		const start = performance.now();
 		const result = await ollamaGenerate({
 			model,
 			prompt: fullPrompt,
 			stream: false,
 			options: { temperature },
 		});
+		setNodeDuration(canvasKey, nodeId, performance.now() - start);
 		setNodeResult(canvasKey, nodeId, result.response);
 		ensureOutputNodeAndEdge(data, node, result.response, settings, {
 			fullPrompt,

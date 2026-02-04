@@ -7,6 +7,9 @@ const edgeModeState = new Map<string, Map<string, "inject" | "concatenate">>();
 /** Node currently running (waiting for AI/kernel) per canvas; used to show "running" on incoming edges. */
 const runningNodeState = new Map<string, string | null>();
 
+/** Per-canvas AI node duration: NodeID -> duration in milliseconds. */
+const nodeDurationState = new Map<string, Map<string, number>>();
+
 function getCanvasState(canvasKey: string): Map<string, string> {
 	let map = canvasState.get(canvasKey);
 	if (!map) {
@@ -21,6 +24,15 @@ function getEdgeModeState(canvasKey: string): Map<string, "inject" | "concatenat
 	if (!map) {
 		map = new Map();
 		edgeModeState.set(canvasKey, map);
+	}
+	return map;
+}
+
+function getNodeDurationState(canvasKey: string): Map<string, number> {
+	let map = nodeDurationState.get(canvasKey);
+	if (!map) {
+		map = new Map();
+		nodeDurationState.set(canvasKey, map);
 	}
 	return map;
 }
@@ -42,6 +54,14 @@ export function setEdgeModes(canvasKey: string, modes: Map<string, "inject" | "c
 	for (const [edgeId, mode] of modes) state.set(edgeId, mode);
 }
 
+export function getNodeDuration(canvasKey: string, nodeId: string): number | undefined {
+	return getNodeDurationState(canvasKey).get(nodeId);
+}
+
+export function setNodeDuration(canvasKey: string, nodeId: string, durationMs: number): void {
+	getNodeDurationState(canvasKey).set(nodeId, durationMs);
+}
+
 export function getRunningNodeId(canvasKey: string): string | null {
 	return runningNodeState.get(canvasKey) ?? null;
 }
@@ -54,6 +74,7 @@ export function setRunningNodeId(canvasKey: string, nodeId: string | null): void
 export function clearCanvasState(canvasKey: string): void {
 	canvasState.delete(canvasKey);
 	edgeModeState.delete(canvasKey);
+	nodeDurationState.delete(canvasKey);
 	runningNodeState.delete(canvasKey);
 }
 

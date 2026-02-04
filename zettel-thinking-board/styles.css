@@ -300,6 +300,24 @@
 	white-space: nowrap;
 }
 
+/* Duration label on canvas nodes: bottom-right; shows AI response time for calculated nodes */
+.canvas-node > .ztb-node-duration-label {
+	pointer-events: none;
+	position: absolute !important;
+	bottom: 0.25em !important;
+	right: 0 !important;
+	left: auto !important;
+	top: auto !important;
+	z-index: 2;
+	font-size: var(--font-smaller);
+	color: var(--text-muted);
+	text-align: right;
+	padding-right: 0.5em;
+	padding-left: 0.5em;
+	padding-top: 0.25em;
+	box-sizing: border-box;
+}
+
 /* Concatenation order badge at top-left of each node (1 = first in run order) so it doesn't overlap the role label */
 .canvas-node > .ztb-node-order-badge {
 	position: absolute !important;

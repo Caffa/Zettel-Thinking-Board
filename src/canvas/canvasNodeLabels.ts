@@ -4,10 +4,12 @@ import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {COLOR_ROLES, getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
-import {getCanvasKey, getEdgeMode, getRunningNodeId} from "../engine/state";
+import {getCanvasKey, getEdgeMode, getNodeDuration, getRunningNodeId} from "../engine/state";
 
 const LABEL_CLASS = "ztb-node-role-label";
 const LABEL_DATA_ATTR = "data-ztb-role-label";
+const DURATION_LABEL_CLASS = "ztb-node-duration-label";
+const DURATION_DATA_ATTR = "data-ztb-duration-label";
 const LEGEND_CLASS = "ztb-canvas-legend";
 const EDGE_MODE_LABEL_CLASS = "ztb-edge-mode-label";
 const EDGE_MODE_DATA_ATTR = "data-ztb-edge-id";
@@ -51,9 +53,10 @@ function findNodeElementByDataId(containerEl: HTMLElement, nodeId: string): HTML
 	return el instanceof HTMLElement ? el : null;
 }
 
-/** Remove all role labels we added from the container. */
+/** Remove all role labels and duration labels we added from the container. */
 export function clearCanvasRoleLabels(containerEl: HTMLElement): void {
 	containerEl.querySelectorAll(`.${LABEL_CLASS}`).forEach((el) => el.remove());
+	containerEl.querySelectorAll(`.${DURATION_LABEL_CLASS}`).forEach((el) => el.remove());
 }
 
 /** Remove the canvas legend from the container. */
@@ -131,6 +134,23 @@ function createLabelEl(text: string): HTMLElement {
 	return el;
 }
 
+function isAIRole(role: NodeRole): boolean {
+	return role === "orange" || role === "purple" || role === "red";
+}
+
+function formatDurationMs(durationMs: number): string {
+	return durationMs < 1000 ? `${Math.round(durationMs)}ms` : `${(durationMs / 1000).toFixed(1)}s`;
+}
+
+/** Create the bottom-right duration label for an AI node that has been run. */
+function createDurationLabelEl(text: string): HTMLElement {
+	const el = document.createElement("div");
+	el.setAttribute("class", DURATION_LABEL_CLASS);
+	el.setAttribute(DURATION_DATA_ATTR, "1");
+	el.textContent = text;
+	return el;
+}
+
 /**
  * Sync floating role labels for the active canvas: for each node whose color maps to a role,
  * add a small label above the node (e.g. "Text", "Python"). Removes existing labels first.
@@ -160,6 +180,7 @@ export async function syncCanvasRoleLabels(
 	// Clear only after we have data so we never paint a frame with labels removed and nothing to show (avoids flicker).
 	clearCanvasRoleLabels(containerEl);
 	syncCanvasLegend(containerEl, settings);
+	const canvasKey = getCanvasKey(canvasFilePath);
 	for (const node of data.nodes) {
 		const role = getNodeRole(node, settings);
 		if (!role) continue;
@@ -171,6 +192,13 @@ export async function syncCanvasRoleLabels(
 		const label = createLabelEl(labelText);
 		// Append after .canvas-node-container so it matches Obsidian file node label position
 		nodeEl.append(label);
+		if (isAIRole(role)) {
+			const durationMs = getNodeDuration(canvasKey, node.id);
+			if (durationMs !== undefined) {
+				const durationLabel = createDurationLabelEl(formatDurationMs(durationMs));
+				nodeEl.append(durationLabel);
+			}
+		}
 	}
 }
 
