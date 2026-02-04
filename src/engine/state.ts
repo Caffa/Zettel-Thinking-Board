@@ -10,6 +10,20 @@ const runningNodeState = new Map<string, string | null>();
 /** Per-canvas AI node duration: NodeID -> duration in milliseconds. */
 const nodeDurationState = new Map<string, Map<string, number>>();
 
+/** Global lock: only one run (node/chain/entire) at a time across all canvases. */
+let runInProgress = false;
+
+/** Run queue: jobs waiting to run. */
+export type RunQueueJob =
+	| { type: "node"; canvasFilePath: string; nodeId: string }
+	| { type: "chain"; canvasFilePath: string; nodeId: string }
+	| { type: "entire"; canvasFilePath: string };
+
+const runQueue: RunQueueJob[] = [];
+
+/** Per-canvas set of node IDs that are the target of a queued job (for "queued" indicator). */
+const queuedNodeIdsState = new Map<string, Set<string>>();
+
 function getCanvasState(canvasKey: string): Map<string, string> {
 	let map = canvasState.get(canvasKey);
 	if (!map) {
@@ -76,6 +90,52 @@ export function clearCanvasState(canvasKey: string): void {
 	edgeModeState.delete(canvasKey);
 	nodeDurationState.delete(canvasKey);
 	runningNodeState.delete(canvasKey);
+	queuedNodeIdsState.delete(canvasKey);
+}
+
+export function getRunInProgress(): boolean {
+	return runInProgress;
+}
+
+export function setRunInProgress(value: boolean): void {
+	runInProgress = value;
+}
+
+export function enqueueRun(job: RunQueueJob): void {
+	runQueue.push(job);
+	if ("nodeId" in job && job.nodeId != null) {
+		const key = getCanvasKey(job.canvasFilePath);
+		let set = queuedNodeIdsState.get(key);
+		if (!set) {
+			set = new Set();
+			queuedNodeIdsState.set(key, set);
+		}
+		set.add(job.nodeId);
+	}
+}
+
+export function dequeueRun(): RunQueueJob | null {
+	const job = runQueue.shift() ?? null;
+	if (job && "nodeId" in job && job.nodeId != null) {
+		const key = getCanvasKey(job.canvasFilePath);
+		const set = queuedNodeIdsState.get(key);
+		if (set) {
+			set.delete(job.nodeId);
+			if (set.size === 0) queuedNodeIdsState.delete(key);
+		}
+	}
+	return job;
+}
+
+export function getQueuedNodeIds(canvasKey: string): ReadonlySet<string> {
+	return queuedNodeIdsState.get(canvasKey) ?? new Set();
+}
+
+/** Clear run queue and run-in-progress flag (e.g. on plugin unload). */
+export function clearRunQueue(): void {
+	runInProgress = false;
+	runQueue.length = 0;
+	queuedNodeIdsState.clear();
 }
 
 /** Canvas key = file path for the canvas file. */

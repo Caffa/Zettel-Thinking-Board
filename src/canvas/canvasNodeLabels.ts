@@ -4,7 +4,7 @@ import {getNodeRole, isOutputEdge} from "./types";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
 import {COLOR_ROLES, getPresetColor, getRoleLabel} from "../settings";
 import type {LiveCanvas} from "../engine/canvasApi";
-import {getCanvasKey, getEdgeMode, getNodeDuration, getRunningNodeId} from "../engine/state";
+import {getCanvasKey, getEdgeMode, getNodeDuration, getQueuedNodeIds, getRunningNodeId} from "../engine/state";
 
 const LABEL_CLASS = "ztb-node-role-label";
 const LABEL_DATA_ATTR = "data-ztb-role-label";
@@ -15,7 +15,7 @@ const EDGE_MODE_LABEL_CLASS = "ztb-edge-mode-label";
 const EDGE_MODE_DATA_ATTR = "data-ztb-edge-id";
 const EDGE_MODE_STATE_ATTR = "data-ztb-edge-state";
 const EDGE_MODE_ICON_CLASS = "ztb-edge-mode-icon";
-type EdgeDisplayState = "running" | "inject" | "concatenate";
+type EdgeDisplayState = "running" | "queued" | "inject" | "concatenate";
 /** Try to get a canvas node's root DOM element from the live canvas (Obsidian uses .canvas-node, no data-id). */
 function getNodeElFromCanvas(canvas: LiveCanvas, nodeId: string): HTMLElement | null {
 	const nodes = canvas.nodes;
@@ -271,6 +271,7 @@ export async function syncCanvasEdgeModeLabels(
 	clearCanvasEdgeModeLabels(containerEl);
 	const canvasKey = getCanvasKey(canvasFilePath);
 	const runningNodeId = getRunningNodeId(canvasKey);
+	const queuedNodeIds = getQueuedNodeIds(canvasKey);
 	const SVG_NS = "http://www.w3.org/2000/svg";
 	const Y_OFFSET_BELOW_PATH = 12;
 	const FONT_SIZE = 11;
@@ -281,14 +282,17 @@ export async function syncCanvasEdgeModeLabels(
 	for (const edge of data.edges) {
 		if (isOutputEdge(edge)) continue;
 		const isRunning = runningNodeId != null && edge.toNode === runningNodeId;
+		const isQueued = queuedNodeIds.has(edge.toNode);
 		const mode = getEdgeMode(canvasKey, edge.id);
 		const state: EdgeDisplayState | null = isRunning
 			? "running"
-			: mode === "inject"
-				? "inject"
-				: mode === "concatenate"
-					? "concatenate"
-					: null;
+			: isQueued
+				? "queued"
+				: mode === "inject"
+					? "inject"
+					: mode === "concatenate"
+						? "concatenate"
+						: null;
 		if (!state) continue;
 		const fromEl =
 			(canvas && getNodeElFromCanvas(canvas, edge.fromNode)) ||
@@ -313,7 +317,13 @@ export async function syncCanvasEdgeModeLabels(
 		labelGroup.setAttribute("transform", `translate(${mid.x}, ${mid.y + Y_OFFSET_BELOW_PATH})`);
 		labelGroup.setAttribute("style", "z-index: 100; isolation: isolate;");
 		const textContent =
-			state === "running" ? "…" : state === "inject" ? "(injected)" : "(concatenated)";
+			state === "running"
+				? "…"
+				: state === "queued"
+					? "queued"
+					: state === "inject"
+						? "(injected)"
+						: "(concatenated)";
 		let textX = 0;
 		const fontSize = state === "running" ? FONT_SIZE_RUNNING : FONT_SIZE;
 		if (state === "running") {

@@ -21,6 +21,13 @@ import {hasOutputNodes, loadCanvasData, saveCanvasData} from "./canvas/nodes";
 import type {CanvasData} from "./canvas/types";
 import {EDGE_LABEL_OUTPUT} from "./canvas/types";
 import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
+import {
+	clearRunQueue,
+	dequeueRun,
+	enqueueRun,
+	getRunInProgress,
+	setRunInProgress,
+} from "./engine/state";
 import {getExample1CanvasData} from "./tutorials/example1Data";
 import {getExample4CanvasData} from "./tutorials/example4Data";
 
@@ -596,6 +603,7 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 
 	onunload() {
 		terminateAllKernels();
+		clearRunQueue();
 		const id = (this as unknown as { _roleLabelsIntervalId?: number })._roleLabelsIntervalId;
 		if (id != null) clearInterval(id);
 	}
@@ -779,6 +787,23 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		return { canvas: v.canvas, file: v.file, containerEl: v.containerEl };
 	}
 
+	/** Returns the canvas view for the given file path if that canvas is open. */
+	getCanvasViewByPath(canvasFilePath: string): { canvas: unknown; file: { path: string }; containerEl: HTMLElement } | null {
+		const leaves = this.app.workspace.getLeavesOfType("canvas");
+		for (const leaf of leaves) {
+			const v = leaf?.view as {
+				getViewType?: () => string;
+				canvas?: unknown;
+				file?: { path: string };
+				containerEl?: HTMLElement;
+			} | undefined;
+			if (!v || v.getViewType?.() !== "canvas") continue;
+			if (v.canvas == null || v.file == null || !v.containerEl) continue;
+			if (v.file.path === canvasFilePath) return { canvas: v.canvas, file: v.file, containerEl: v.containerEl };
+		}
+		return null;
+	}
+
 	private static readonly ZTB_TOOLBAR_CLASS = "ztb-canvas-toolbar";
 	private static readonly ZTB_TEMPLATE_BANNER_CLASS = "ztb-template-banner";
 
@@ -826,32 +851,100 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		}
 	}
 
+	/** Process the next job in the run queue, if any. */
+	private async processQueue(): Promise<void> {
+		const job = dequeueRun();
+		if (job == null) return;
+		setRunInProgress(true);
+		const view = this.getCanvasViewByPath(job.canvasFilePath);
+		const liveCanvas = view
+			? (view.canvas as import("./engine/canvasApi").LiveCanvas)
+			: null;
+		if (view && liveCanvas) {
+			const viewWithData = view as unknown as { getData?: () => unknown };
+			if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
+				(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
+			}
+		}
+		try {
+			if (job.type === "node" && "nodeId" in job) {
+				const result = await runnerRunNode(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas);
+				if (!result.ok) new Notice(result.message ?? "Run node failed.");
+			} else if (job.type === "chain" && "nodeId" in job) {
+				const result = await runnerRunChain(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas);
+				if (!result.ok) new Notice(result.message ?? "Run chain failed.");
+			} else if (job.type === "entire") {
+				const result = await runnerRunEntireCanvas(this.app, this.settings, job.canvasFilePath, liveCanvas);
+				if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
+			}
+		} catch (e) {
+			new Notice(e instanceof Error ? e.message : String(e));
+		} finally {
+			setRunInProgress(false);
+			await this.processQueue();
+		}
+	}
+
 	/** Run a single node (call from context menu with node id). */
 	async runNode(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
+		if (getRunInProgress()) {
+			enqueueRun({ type: "node", canvasFilePath: view.file.path, nodeId });
+			new Notice("Run queued.");
+			const active = this.getActiveCanvasView();
+			if (active?.file.path === view.file.path) {
+				const liveCanvas = active.canvas as import("./engine/canvasApi").LiveCanvas;
+				const isStillActive = (): boolean => this.getActiveCanvasView()?.containerEl === view.containerEl;
+				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas, isStillActive);
+			}
+			return;
+		}
 		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
 		const liveCanvas = canvas;
 		const viewWithData = view as unknown as { getData?: () => unknown };
 		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
-		const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas);
-		if (!result.ok) new Notice(result.message ?? "Run node failed.");
+		setRunInProgress(true);
+		try {
+			const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+			if (!result.ok) new Notice(result.message ?? "Run node failed.");
+		} finally {
+			setRunInProgress(false);
+			await this.processQueue();
+		}
 	}
 
 	/** Run chain from roots to the given node (call from context menu with node id). */
 	async runChain(nodeId: string): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
+		if (getRunInProgress()) {
+			enqueueRun({ type: "chain", canvasFilePath: view.file.path, nodeId });
+			new Notice("Run queued.");
+			const active = this.getActiveCanvasView();
+			if (active?.file.path === view.file.path) {
+				const liveCanvas = active.canvas as import("./engine/canvasApi").LiveCanvas;
+				const isStillActive = (): boolean => this.getActiveCanvasView()?.containerEl === view.containerEl;
+				syncCanvasEdgeModeLabels(this.app.vault, view.file.path, view.containerEl, liveCanvas, isStillActive);
+			}
+			return;
+		}
 		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
 		const liveCanvas = canvas;
 		const viewWithData = view as unknown as { getData?: () => unknown };
 		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
-		const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas);
-		if (!result.ok) new Notice(result.message ?? "Run chain failed.");
+		setRunInProgress(true);
+		try {
+			const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+			if (!result.ok) new Notice(result.message ?? "Run chain failed.");
+		} finally {
+			setRunInProgress(false);
+			await this.processQueue();
+		}
 	}
 
 	/** Dismiss the Green output node for the given source node (call from context menu with node id). */
@@ -871,14 +964,25 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	async runEntireCanvas(): Promise<void> {
 		const view = this.getActiveCanvasView();
 		if (!view) return;
+		if (getRunInProgress()) {
+			enqueueRun({ type: "entire", canvasFilePath: view.file.path });
+			new Notice("Run queued.");
+			return;
+		}
 		const canvas = view.canvas as import("./engine/canvasApi").LiveCanvas;
 		const liveCanvas = canvas;
 		const viewWithData = view as unknown as { getData?: () => unknown };
 		if (!liveCanvas.getData && typeof viewWithData.getData === "function") {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
-		const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas);
-		if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
+		setRunInProgress(true);
+		try {
+			const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas);
+			if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
+		} finally {
+			setRunInProgress(false);
+			await this.processQueue();
+		}
 	}
 
 	/** Dismiss all output nodes on the canvas (call from canvas background context menu). */

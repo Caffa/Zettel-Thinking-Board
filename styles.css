@@ -407,6 +407,11 @@
 	animation: ztb-edge-running-pulse 1s ease-in-out infinite;
 }
 
+/* Queued: muted text, no animation (distinct from running) */
+.ztb-edge-mode-svg-label[data-ztb-edge-state="queued"] text {
+	fill: var(--text-muted);
+}
+
 /* Legacy HTML edge mode label (if used elsewhere) */
 .ztb-edge-mode-label {
 	pointer-events: none;
