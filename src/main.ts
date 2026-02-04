@@ -338,9 +338,6 @@ function resolveCanvasNodeId(node: unknown): string | undefined {
 	return data?.id;
 }
 
-/** Debug: set to true when canvas:node-menu callback has fired at least once (proves event is received). */
-let debugNodeMenuFired = false;
-
 export default class ZettelThinkingBoardPlugin extends Plugin {
 	settings: ZettelPluginSettings;
 
@@ -430,7 +427,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			// Canvas node context menu (event name is undocumented; try workspace.on("canvas:node-menu")).
 			// Defer registration so Obsidian canvas is ready (avoids "reading '_'" in app.js).
 			const addNodeMenuItems = (menu: Menu, node: unknown): void => {
-				debugNodeMenuFired = true;
 				const nodeId = resolveCanvasNodeId(node);
 				if (!nodeId) return;
 				menu.addItem((item) =>
@@ -483,23 +479,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			} catch (e) {
 				console.error("Zettel Thinking Board: could not register canvas background menu.", e);
 			}
-
-			// Debug: command to test if we can affect the canvas and if canvas:node-menu ever fires.
-			this.addCommand({
-				id: "zettel-debug-canvas-hook",
-				name: "Debug canvas hook",
-				checkCallback: (checking: boolean) => {
-					if (checking) return true;
-					const canvasActive = this.getActiveCanvasView() != null;
-					const msg =
-						"Canvas active: " +
-						(canvasActive ? "yes" : "no (focus a canvas first)") +
-						". Node menu ever fired: " +
-						(debugNodeMenuFired ? "yes" : "no (right-click a node to test).");
-					new Notice(msg);
-					return true;
-				},
-			});
 
 			// Terminate kernel when a canvas is closed (one kernel per canvas)
 			// Also check for output nodes and remind user to dismiss them
@@ -865,9 +844,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			clearRunStartCanvasData();
 			return;
 		}
-		// #region agent log
-		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "dequeued job", data: { type: job.type, canvasFilePath: job.canvasFilePath, nodeId: "nodeId" in job ? job.nodeId : undefined }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3-H5" }) }).catch(() => {});
-		// #endregion
 		if (job.type === "chain" && "nodeId" in job) {
 			const chainIds = await getChainNodeIds(this.app, this.settings, job.canvasFilePath, job.nodeId);
 			if (chainIds && chainIds.length > 0) {
@@ -877,11 +853,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		setRunInProgress(true);
 		const view = this.getCanvasViewByPath(job.canvasFilePath);
 		// Run-start data is set by the first run (runNode/runChain/runEntireCanvas); queued jobs use it
-		// #region agent log
-		if (view) {
-			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "view path vs job path", data: { jobCanvasFilePath: job.canvasFilePath, viewFilePath: view.file.path, match: view.file.path === job.canvasFilePath }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {});
-		}
-		// #endregion
 		const liveCanvas = view
 			? (view.canvas as import("./engine/canvasApi").LiveCanvas)
 			: null;
@@ -906,9 +877,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		} catch (e) {
 			new Notice(e instanceof Error ? e.message : String(e));
 		} finally {
-			// #region agent log
-			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "job finished, before processQueue", data: { hadView: !!view }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H5" }) }).catch(() => {});
-			// #endregion
 			setRunInProgress(false);
 			await this.processQueue();
 		}

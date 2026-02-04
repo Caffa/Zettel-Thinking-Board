@@ -323,19 +323,11 @@ async function updateEdgeLabelsAndSave(
 		}
 	}
 	// Preserve user edits (e.g. node color, position) from live canvas before we overwrite with our data
-	// #region agent log
-	const outBeforeMerge = countOutputNodeIds(data);
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "before merge/setData", data: { dataOutputCount: outBeforeMerge.count, dataOutputIds: outBeforeMerge.ids, liveNodeCount: liveData?.nodes?.length ?? 0 }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
-	// #endregion
 	if (liveData?.nodes) {
 		mergePreserveUserNodeProps(data, liveData);
 	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
-	// #region agent log
-	const outAfterSetData = countOutputNodeIds(data);
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "after setData", data: { dataOutputCount: outAfterSetData.count, dataOutputIds: outAfterSetData.ids }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
-	// #endregion
 	if (liveCanvas?.requestSave) liveCanvas.requestSave(); // so Obsidian marks canvas dirty and won't overwrite on tab switch
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
 	if (!saved) new Notice("Failed to save canvas.");
@@ -870,9 +862,6 @@ export async function runNode(
 	if (role === "green") return { ok: false, message: "Green nodes are output-only." };
 	const parentIds = getParentIdsSortedByY(nodeId, data);
 	const canvasKey = getCanvasKey(canvasFilePath);
-	// #region agent log
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runNode", message: "runNode entry", data: { canvasKey, nodeId, canvasFilePath }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
-	// #endregion
 	for (const pid of parentIds) {
 		if (getNodeResult(canvasKey, pid) == null) {
 			return runChain(app, settings, canvasFilePath, nodeId, liveCanvas, nodeId, runStartData ?? null);
@@ -920,12 +909,6 @@ export async function runEntireCanvas(
 	}
 }
 
-/** Count output-type node ids in data (toNode of edges labeled output). */
-function countOutputNodeIds(data: CanvasData): { count: number; ids: string[] } {
-	const ids = [...new Set(data.edges.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT).map((e) => e.toNode))];
-	return { count: ids.length, ids };
-}
-
 /** Return ordered node IDs for a chain from roots to the given target, or null if no data, no path, or cycle. */
 export async function getChainNodeIds(
 	app: App,
@@ -958,10 +941,6 @@ export async function runChain(
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
-	// #region agent log
-	const outAtLoad = countOutputNodeIds(data);
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runChain", message: "runChain after load", data: { nodeCount: data.nodes.length, outputCount: outAtLoad.count, outputIds: outAtLoad.ids, targetNodeId: nodeId }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1" }) }).catch(() => {});
-	// #endregion
 	const roots = getRootIds(data);
 	const rootsReachingCurrent = roots.filter((r) => canReach(data, r, nodeId));
 	if (rootsReachingCurrent.length === 0) return { ok: false, message: "No root reaches this node." };
@@ -1052,10 +1031,5 @@ export async function dismissAllOutput(
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
-	// #region agent log
-	const reRead = await loadCanvasData(vault, canvasFilePath);
-	const outAfterDismiss = reRead ? countOutputNodeIds(reRead) : { count: -1, ids: [] };
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:dismissAllOutput", message: "after save, re-read file", data: { saved, outputCountOnFile: outAfterDismiss.count, outputIdsOnFile: outAfterDismiss.ids }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H4" }) }).catch(() => {});
-	// #endregion
 	if (!saved) new Notice("Failed to save canvas.");
 }

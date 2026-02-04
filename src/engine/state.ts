@@ -85,9 +85,6 @@ export function getRunningNodeId(canvasKey: string): string | null {
 }
 
 export function setRunningNodeId(canvasKey: string, nodeId: string | null): void {
-	// #region agent log
-	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "state.ts:setRunningNodeId", message: "setRunningNodeId", data: { canvasKey, nodeId }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1-H5" }) }).catch(() => {});
-	// #endregion
 	if (nodeId == null) runningNodeState.delete(canvasKey);
 	else runningNodeState.set(canvasKey, nodeId);
 }
