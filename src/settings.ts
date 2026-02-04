@@ -106,6 +106,7 @@ export interface ZettelPluginSettings {
 	showPromptInOutput: boolean;
 	showThinkingNode: boolean;
 	showNodeRoleLabels: boolean;
+	supportShorthandPlaceholders: boolean;
 	pythonPath: string;
 	canvasTemplateFolder: string;
 	canvasOutputFolder: string;
@@ -130,6 +131,7 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	showPromptInOutput: false,
 	showThinkingNode: false,
 	showNodeRoleLabels: true,
+	supportShorthandPlaceholders: true,
 	pythonPath: "python3",
 	canvasTemplateFolder: "",
 	canvasOutputFolder: "",
@@ -673,6 +675,16 @@ export class ZettelSettingTab extends PluginSettingTab {
 				.setValue(s.showThinkingNode)
 				.onChange(async (value) => {
 					this.plugin.settings.showThinkingNode = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(displaySection)
+			.setName("Support shorthand placeholders ({{name}})")
+			.setDesc("When on, both {{var:name}} and {{name}} in card text are treated as inject placeholders (edge label = name). When off, only {{var:name}} is inject.")
+			.addToggle((toggle) => toggle
+				.setValue(s.supportShorthandPlaceholders)
+				.onChange(async (value) => {
+					this.plugin.settings.supportShorthandPlaceholders = value;
 					await this.plugin.saveSettings();
 				}));
 

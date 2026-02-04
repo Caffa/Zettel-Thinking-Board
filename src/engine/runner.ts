@@ -207,11 +207,12 @@ function stripPythonCodeFence(template: string): string {
 	return template.trim();
 }
 
-/** Build concatenated context, template with {{var:name}} substituted, and per-edge mode. */
+/** Build concatenated context, template with {{var:name}} (and optionally {{name}}) substituted, and per-edge mode. */
 function buildInputWithVariables(
 	canvasKey: string,
 	nodeInput: string,
-	incoming: { parentId: string; edge: CanvasEdgeData; variableName: string }[]
+	incoming: { parentId: string; edge: CanvasEdgeData; variableName: string }[],
+	settings: ZettelPluginSettings
 ): { concatenatedPart: string; template: string; edgeModes: Map<string, EdgeInputMode> } {
 	const edgeModes = new Map<string, EdgeInputMode>();
 	const parentResults = new Map<string, string>();
@@ -221,11 +222,13 @@ function buildInputWithVariables(
 	}
 	let concatenatedPart = "";
 	const varValues: Record<string, string> = {};
+	const shorthand = settings.supportShorthandPlaceholders;
 	for (const { parentId, edge, variableName } of incoming) {
 		const result = parentResults.get(parentId);
 		if (result == null) continue;
 		const usedAsVar =
-			variableName.length > 0 && nodeInput.includes(`{{var:${variableName}}}`);
+			variableName.length > 0 &&
+			(nodeInput.includes(`{{var:${variableName}}}`) || (shorthand && nodeInput.includes(`{{${variableName}}}`)));
 		if (usedAsVar) {
 			edgeModes.set(edge.id, "inject");
 			varValues[variableName] = result;
@@ -237,6 +240,7 @@ function buildInputWithVariables(
 	let template = nodeInput;
 	for (const [name, value] of Object.entries(varValues)) {
 		template = template.split(`{{var:${name}}}`).join(value);
+		if (shorthand) template = template.split(`{{${name}}}`).join(value);
 	}
 	return {
 		concatenatedPart: concatenatedPart.trim(),
@@ -334,7 +338,8 @@ async function runSingleNode(
 			const { concatenatedPart, template } = buildInputWithVariables(
 				canvasKey,
 				nodeInput,
-				incoming
+				incoming,
+				settings
 			);
 			const fullContent =
 				concatenatedPart.length > 0 ? `${concatenatedPart}\n\n---\n\n${template}` : template;
@@ -360,7 +365,8 @@ async function runSingleNode(
 	const { concatenatedPart, template, edgeModes } = buildInputWithVariables(
 		canvasKey,
 		nodeInput,
-		incoming
+		incoming,
+		settings
 	);
 	const fullPrompt =
 		concatenatedPart.length > 0 ? `${concatenatedPart}\n\n---\n\n${template}` : template;
