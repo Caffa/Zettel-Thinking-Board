@@ -11,6 +11,7 @@ import {
 	getNodeRole,
 	getIncomingEdgesWithLabels,
 	getParentIdsSortedByY,
+	getSourceNodeForOutputNode,
 	GREEN_NODE_PADDING,
 	isAuxiliaryEdge,
 	loadCanvasData,
@@ -39,16 +40,27 @@ function isNonAIRole(role: NodeRole | null): boolean {
 	return role === "blue" || role === "yellow";
 }
 
-/** Get all root node ids (no incoming non-auxiliary edges). */
+/** Execution edges with connections to green output nodes redirected to each output's source node. */
+function getExecEdgesWithOutputRedirection(data: CanvasData): CanvasEdgeData[] {
+	return data.edges
+		.filter((e) => !isAuxiliaryEdge(e))
+		.map((e) => {
+			const source = getSourceNodeForOutputNode(data, e.fromNode);
+			if (source != null) return { ...e, fromNode: source };
+			return e;
+		});
+}
+
+/** Get all root node ids (no incoming non-auxiliary edges; output-node connections count as to source). */
 function getRootIds(data: CanvasData): string[] {
-	const hasIncoming = new Set(
-		data.edges.filter((e) => !isAuxiliaryEdge(e)).map((e) => e.toNode)
-	);
+	const execEdges = getExecEdgesWithOutputRedirection(data);
+	const hasIncoming = new Set(execEdges.map((e) => e.toNode));
 	return data.nodes.filter((n) => !hasIncoming.has(n.id)).map((n) => n.id);
 }
 
-/** Check if there is a path from fromId to toId (ignoring auxiliary edges). */
+/** Check if there is a path from fromId to toId (ignoring auxiliary edges; output nodes redirect to source). */
 function canReach(data: CanvasData, fromId: string, toId: string): boolean {
+	const execEdges = getExecEdgesWithOutputRedirection(data);
 	const visited = new Set<string>();
 	const stack = [fromId];
 	while (stack.length > 0) {
@@ -56,8 +68,8 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 		if (id === toId) return true;
 		if (visited.has(id)) continue;
 		visited.add(id);
-		for (const e of data.edges) {
-			if (!isAuxiliaryEdge(e) && e.fromNode === id) stack.push(e.toNode);
+		for (const e of execEdges) {
+			if (e.fromNode === id) stack.push(e.toNode);
 		}
 	}
 	return false;
@@ -66,13 +78,13 @@ function canReach(data: CanvasData, fromId: string, toId: string): boolean {
 /** Result of topological sort: either a valid order or cycle detected. */
 type TopoResult = { order: string[] } | { cycle: true };
 
-/** Topological order of node ids (only nodes that are ancestors of target; ignores auxiliary edges). */
+/** Topological order of node ids (only nodes that are ancestors of target; ignores auxiliary edges; output-node connections redirect to source). */
 function topologicalOrderToTarget(
 	data: CanvasData,
 	targetId: string,
 	settings: ZettelPluginSettings
 ): TopoResult {
-	const execEdges = data.edges.filter((e) => !isAuxiliaryEdge(e));
+	const execEdges = getExecEdgesWithOutputRedirection(data);
 	const nodeIds = new Set<string>();
 	const stack = [targetId];
 	while (stack.length > 0) {
@@ -86,10 +98,10 @@ function topologicalOrderToTarget(
 	return topologicalSort(data, execEdges, nodeIds, settings);
 }
 
-/** Topological order of all nodes reachable from any root (ignores auxiliary edges). */
+/** Topological order of all nodes reachable from any root (ignores auxiliary edges; output-node connections redirect to source). */
 function topologicalOrderFull(data: CanvasData, settings: ZettelPluginSettings): TopoResult {
 	const roots = getRootIds(data);
-	const execEdges = data.edges.filter((e) => !isAuxiliaryEdge(e));
+	const execEdges = getExecEdgesWithOutputRedirection(data);
 	const nodeIds = new Set<string>();
 	for (const rootId of roots) {
 		const stack = [rootId];

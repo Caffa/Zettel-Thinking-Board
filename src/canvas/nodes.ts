@@ -67,6 +67,7 @@ export {
 	getNodeRole,
 	getParentIdsSortedByY,
 	getIncomingEdgesWithLabels,
+	getSourceNodeForOutputNode,
 	GREEN_NODE_PADDING,
 	hasOutputNodes,
 	isAuxiliaryEdge,

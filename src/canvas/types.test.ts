@@ -6,6 +6,7 @@ import {
 	getNodeById,
 	getIncomingEdgesWithLabels,
 	findOutputNodeForSource,
+	getSourceNodeForOutputNode,
 	isOutputEdge,
 	isAuxiliaryEdge,
 	parseEdgeVariableName,
@@ -169,6 +170,23 @@ describe("getIncomingEdgesWithLabels", () => {
 		expect(result[1]!.parentId).toBe("b");
 		expect(result[1]!.variableName).toBe("right");
 	});
+	it("treats connection to green output node as connection to its source", () => {
+		const data: CanvasData = {
+			nodes: [
+				{ id: "run", x: 0, y: 0, width: 100, height: 50, type: "text", text: "" },
+				{ id: "out", x: 0, y: 60, width: 100, height: 50, type: "text", text: "" },
+				{ id: "b", x: 0, y: 120, width: 100, height: 50, type: "text", text: "" },
+			],
+			edges: [
+				{ id: "eOut", fromNode: "run", toNode: "out", label: EDGE_LABEL_OUTPUT },
+				{ id: "eToB", fromNode: "out", toNode: "b", label: "summary" },
+			],
+		};
+		const result = getIncomingEdgesWithLabels("b", data);
+		expect(result).toHaveLength(1);
+		expect(result[0]!.parentId).toBe("run");
+		expect(result[0]!.variableName).toBe("summary");
+	});
 });
 
 describe("getParentIdsSortedByY", () => {
@@ -204,6 +222,20 @@ describe("getParentIdsSortedByY", () => {
 			],
 		};
 		expect(getParentIdsSortedByY("out", data)).toEqual([]);
+	});
+	it("treats connection from green output node as connection from its source", () => {
+		const data: CanvasData = {
+			nodes: [
+				{ id: "run", x: 0, y: 0, width: 100, height: 50, type: "text", text: "" },
+				{ id: "out", x: 0, y: 60, width: 100, height: 50, type: "text", text: "" },
+				{ id: "b", x: 0, y: 120, width: 100, height: 50, type: "text", text: "" },
+			],
+			edges: [
+				{ id: "eOut", fromNode: "run", toNode: "out", label: EDGE_LABEL_OUTPUT },
+				{ id: "eToB", fromNode: "out", toNode: "b", label: "x" },
+			],
+		};
+		expect(getParentIdsSortedByY("b", data)).toEqual(["run"]);
 	});
 });
 
@@ -258,6 +290,37 @@ describe("findOutputNodeForSource", () => {
 			],
 		};
 		expect(findOutputNodeForSource(data, "src", settings)).toBe("out");
+	});
+});
+
+describe("getSourceNodeForOutputNode", () => {
+	it("returns fromNode of edge with label output when toNode is given", () => {
+		const data: CanvasData = {
+			nodes: [
+				{ id: "run", x: 0, y: 0, width: 100, height: 50, type: "text", text: "" },
+				{ id: "out", x: 0, y: 60, width: 100, height: 50, type: "text", text: "" },
+			],
+			edges: [
+				{ id: "e1", fromNode: "run", toNode: "out", label: EDGE_LABEL_OUTPUT },
+			],
+		};
+		expect(getSourceNodeForOutputNode(data, "out")).toBe("run");
+	});
+	it("returns null when node is not the target of an output edge", () => {
+		const data: CanvasData = {
+			nodes: [
+				{ id: "a", x: 0, y: 0, width: 100, height: 50, type: "text", text: "" },
+				{ id: "b", x: 0, y: 60, width: 100, height: 50, type: "text", text: "" },
+			],
+			edges: [
+				{ id: "e1", fromNode: "a", toNode: "b", label: "summary" },
+			],
+		};
+		expect(getSourceNodeForOutputNode(data, "b")).toBeNull();
+	});
+	it("returns null when node id is missing", () => {
+		const data: CanvasData = { nodes: [], edges: [] };
+		expect(getSourceNodeForOutputNode(data, "missing")).toBeNull();
 	});
 });
 

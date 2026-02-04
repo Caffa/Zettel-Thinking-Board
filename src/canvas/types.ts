@@ -60,6 +60,12 @@ export function isAuxiliaryEdge(edge: CanvasEdgeData): boolean {
 	return label === EDGE_LABEL_OUTPUT || label === EDGE_LABEL_PROMPT || label === EDGE_LABEL_THINKING;
 }
 
+/** If nodeId is a green output node (toNode of an edge labeled "output"), return that edge's fromNode; otherwise null. */
+export function getSourceNodeForOutputNode(data: CanvasData, nodeId: string): string | null {
+	const outEdge = data.edges.find((e) => e.toNode === nodeId && isOutputEdge(e));
+	return outEdge ? outEdge.fromNode : null;
+}
+
 /** Incoming edge with parent id and optional variable name (from label). */
 export interface IncomingEdgeInfo {
 	parentId: string;
@@ -67,16 +73,17 @@ export interface IncomingEdgeInfo {
 	variableName: string;
 }
 
-/** Get incoming edges for a node with parent id and variable name, sorted by parent y then x (higher, then left-most). Excludes output/prompt/thinking edges. */
+/** Get incoming edges for a node with parent id and variable name, sorted by parent y then x (higher, then left-most). Excludes output/prompt/thinking edges. Connections to a green output node are treated as connections to that output's source node. */
 export function getIncomingEdgesWithLabels(nodeId: string, data: CanvasData): IncomingEdgeInfo[] {
 	const edges = data.edges.filter((e) => e.toNode === nodeId && !isAuxiliaryEdge(e));
 	const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
 	const withPos = edges.map((e) => {
-		const parent = nodeMap.get(e.fromNode);
+		const effectiveParentId = getSourceNodeForOutputNode(data, e.fromNode) ?? e.fromNode;
+		const parent = nodeMap.get(effectiveParentId);
 		const y = parent?.y ?? 0;
 		const x = parent?.x ?? 0;
 		return {
-			parentId: e.fromNode,
+			parentId: effectiveParentId,
 			edge: e,
 			variableName: parseEdgeVariableName(e.label),
 			y,
@@ -87,12 +94,13 @@ export function getIncomingEdgesWithLabels(nodeId: string, data: CanvasData): In
 	return withPos.map(({ parentId, edge, variableName }) => ({ parentId, edge, variableName }));
 }
 
-/** Get parent node IDs for a node, sorted by y (top to bottom). Excludes output/prompt/thinking edges. */
+/** Get parent node IDs for a node, sorted by y (top to bottom). Excludes output/prompt/thinking edges. Connections to a green output node are treated as connections to that output's source node. */
 export function getParentIdsSortedByY(nodeId: string, data: CanvasData): string[] {
 	const edges = data.edges.filter((e) => e.toNode === nodeId && !isAuxiliaryEdge(e));
-	const fromIds = [...new Set(edges.map((e) => e.fromNode))];
+	const fromIds = edges.map((e) => getSourceNodeForOutputNode(data, e.fromNode) ?? e.fromNode);
+	const uniqueIds = [...new Set(fromIds)];
 	const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
-	const withY = fromIds
+	const withY = uniqueIds
 		.map((id) => {
 			const node = nodeMap.get(id);
 			return node ? { id, y: node.y } : null;
