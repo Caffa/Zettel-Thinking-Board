@@ -1,0 +1,12 @@
+---
+description: Things to keep in mind when coding this plugin (recurring bug fixes)
+alwaysApply: true
+---
+
+# Plugin coding gotchas
+
+## Canvas edge / arrow positioning (gap at node border)
+
+- **What was wrong:** Edges created without `fromSide`/`toSide` are drawn by Obsidian from node center to node center, so there is a visible gap between the arrow tip and the note border.
+- **Fix:** When pushing or creating canvas edges (e.g. run node → output node), set `fromSide` and `toSide` on the edge object. For vertical flow (source above, target below) use `fromSide: "bottom"` and `toSide: "top"`. The tutorial canvas and auxiliary edges (prompt/thinking) already did this; the output edge in `ensureOutputNodeAndEdge` was missing it.
+- **How to avoid:** Whenever adding or pushing an edge in `data.edges` (in `runner.ts` or elsewhere), include `fromSide` and `toSide` appropriate to the layout (e.g. "bottom"/"top" for vertical, "left"/"right" for horizontal) so arrows connect at node edges, not centers.
