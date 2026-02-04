@@ -1,6 +1,6 @@
 {
 	"name": "zettel-thinking-board",
-	"version": "1.0.8",
+	"version": "1.0.9",
 	"description": "This is a Zettel Thinking Board for Obsidian (https://obsidian.md)",
 	"main": "main.js",
 	"type": "module",
