@@ -1,8 +1,11 @@
 # Zettel Thinking Board 🧠
 
-**A Visual AI Workbench for Obsidian.**
+**A Visual AI Whiteboard for Obsidian.**
 
-Zettel Thinking Board turns your Canvas into a stateful, executable flow diagram. Chain together **Local LLMs** (Ollama) and **Python Scripts** to build complex AI workflows, visualize the results, and refine your thoughts.
+<img width="2555" height="1415" alt="98548" src="https://github.com/user-attachments/assets/44d9556e-5e25-49bf-bcaf-efedc2317b80" />
+
+
+Zettel Thinking Board turns your Canvas into an executable flow diagram for python and ollama models. Chain together **Local LLMs** (Ollama) and **Python Scripts** to build complex AI workflows, visualize the results, and refine your thoughts.
 
 ## 🌟 The "Zettel" Workflow
 
