@@ -13,6 +13,10 @@ const nodeDurationState = new Map<string, Map<string, number>>();
 /** Global lock: only one run (node/chain/entire) at a time across all canvases. */
 let runInProgress = false;
 
+/** Canvas state at run start (first job in session), per canvas; used to respect deletions and placement since run started. */
+export type RunStartCanvasData = { nodes: Array<{ id: string }> } | null;
+const runStartByCanvas = new Map<string, RunStartCanvasData>();
+
 /** Run queue: jobs waiting to run. */
 export type RunQueueJob =
 	| { type: "node"; canvasFilePath: string; nodeId: string }
@@ -81,6 +85,9 @@ export function getRunningNodeId(canvasKey: string): string | null {
 }
 
 export function setRunningNodeId(canvasKey: string, nodeId: string | null): void {
+	// #region agent log
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "state.ts:setRunningNodeId", message: "setRunningNodeId", data: { canvasKey, nodeId }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1-H5" }) }).catch(() => {});
+	// #endregion
 	if (nodeId == null) runningNodeState.delete(canvasKey);
 	else runningNodeState.set(canvasKey, nodeId);
 }
@@ -101,9 +108,24 @@ export function setRunInProgress(value: boolean): void {
 	runInProgress = value;
 }
 
+export function setRunStartCanvasData(canvasKey: string, data: RunStartCanvasData): void {
+	if (data == null) runStartByCanvas.delete(canvasKey);
+	else runStartByCanvas.set(canvasKey, data);
+}
+
+export function getRunStartCanvasData(canvasKey: string): RunStartCanvasData {
+	return runStartByCanvas.get(canvasKey) ?? null;
+}
+
+/** Clear all run-start data (e.g. when run session ends). */
+export function clearRunStartCanvasData(): void {
+	runStartByCanvas.clear();
+}
+
 export function enqueueRun(job: RunQueueJob): void {
 	runQueue.push(job);
-	if ("nodeId" in job && job.nodeId != null) {
+	// Only add single nodeId for "node" jobs; "chain" jobs add all chain nodes via addQueuedNodeIds in main.
+	if (job.type === "node" && "nodeId" in job && job.nodeId != null) {
 		const key = getCanvasKey(job.canvasFilePath);
 		let set = queuedNodeIdsState.get(key);
 		if (!set) {
@@ -114,9 +136,28 @@ export function enqueueRun(job: RunQueueJob): void {
 	}
 }
 
+/** Add node IDs to the queued set for a canvas (e.g. all nodes in a queued chain). */
+export function addQueuedNodeIds(canvasKey: string, nodeIds: Iterable<string>): void {
+	let set = queuedNodeIdsState.get(canvasKey);
+	if (!set) {
+		set = new Set();
+		queuedNodeIdsState.set(canvasKey, set);
+	}
+	for (const id of nodeIds) set.add(id);
+}
+
+/** Remove node IDs from the queued set for a canvas (e.g. when a chain job starts running). */
+export function removeQueuedNodeIds(canvasKey: string, nodeIds: Iterable<string>): void {
+	const set = queuedNodeIdsState.get(canvasKey);
+	if (!set) return;
+	for (const id of nodeIds) set.delete(id);
+	if (set.size === 0) queuedNodeIdsState.delete(canvasKey);
+}
+
 export function dequeueRun(): RunQueueJob | null {
 	const job = runQueue.shift() ?? null;
-	if (job && "nodeId" in job && job.nodeId != null) {
+	// Only remove single nodeId for "node" jobs; "chain" jobs remove all chain nodes via removeQueuedNodeIds in main.
+	if (job && job.type === "node" && "nodeId" in job && job.nodeId != null) {
 		const key = getCanvasKey(job.canvasFilePath);
 		const set = queuedNodeIdsState.get(key);
 		if (set) {
@@ -136,6 +177,7 @@ export function clearRunQueue(): void {
 	runInProgress = false;
 	runQueue.length = 0;
 	queuedNodeIdsState.clear();
+	runStartByCanvas.clear();
 }
 
 /** Canvas key = file path for the canvas file. */

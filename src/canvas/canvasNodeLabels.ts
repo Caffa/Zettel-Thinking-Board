@@ -271,6 +271,9 @@ export async function syncCanvasEdgeModeLabels(
 	clearCanvasEdgeModeLabels(containerEl);
 	const canvasKey = getCanvasKey(canvasFilePath);
 	const runningNodeId = getRunningNodeId(canvasKey);
+	// #region agent log
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "canvasNodeLabels.ts:syncCanvasEdgeModeLabels", message: "sync labels", data: { canvasKey, canvasFilePath, runningNodeId }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3-H4" }) }).catch(() => {});
+	// #endregion
 	const queuedNodeIds = getQueuedNodeIds(canvasKey);
 	const SVG_NS = "http://www.w3.org/2000/svg";
 	const Y_OFFSET_BELOW_PATH = 12;

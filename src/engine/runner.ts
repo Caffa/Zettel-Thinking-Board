@@ -23,6 +23,7 @@ import {isTextNode} from "../canvas/types";
 import type {LiveCanvas} from "./canvasApi";
 import {getKernelForCanvas} from "./kernelManager";
 import {ollamaGenerate} from "./ollama";
+import type {RunStartCanvasData} from "./state";
 import {
 	getCanvasKey,
 	getNodeResult,
@@ -287,7 +288,8 @@ async function updateEdgeLabelsAndSave(
 	data: CanvasData,
 	nodeId: string,
 	edgeModes: Map<string, EdgeInputMode>,
-	liveCanvas: LiveCanvas | null
+	liveCanvas: LiveCanvas | null,
+	runStartData: RunStartCanvasData
 ): Promise<void> {
 	const canvasKey = getCanvasKey(canvasFilePath);
 	setEdgeModes(canvasKey, edgeModes);
@@ -305,13 +307,35 @@ async function updateEdgeLabelsAndSave(
 			changed = true;
 		}
 	}
-	// Preserve user edits (e.g. node color) from live canvas before we overwrite with our data
 	const liveData = liveCanvas?.getData?.();
+	// Remove auxiliary nodes that were on canvas at run start but are no longer in live (user deleted / moved away)
+	if (runStartData?.nodes && liveData?.nodes) {
+		const runStartNodeIds = new Set(runStartData.nodes.map((n) => n.id));
+		const liveNodeIds = new Set(liveData.nodes.map((n) => n.id));
+		const auxiliaryIds = getAuxiliaryNodeIds(data);
+		const toRemove = new Set<string>();
+		for (const id of auxiliaryIds) {
+			if (runStartNodeIds.has(id) && !liveNodeIds.has(id)) toRemove.add(id);
+		}
+		if (toRemove.size > 0) {
+			data.nodes = data.nodes.filter((n) => !toRemove.has(n.id));
+			data.edges = data.edges.filter((e) => !toRemove.has(e.fromNode) && !toRemove.has(e.toNode));
+		}
+	}
+	// Preserve user edits (e.g. node color, position) from live canvas before we overwrite with our data
+	// #region agent log
+	const outBeforeMerge = countOutputNodeIds(data);
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "before merge/setData", data: { dataOutputCount: outBeforeMerge.count, dataOutputIds: outBeforeMerge.ids, liveNodeCount: liveData?.nodes?.length ?? 0 }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
+	// #endregion
 	if (liveData?.nodes) {
 		mergePreserveUserNodeProps(data, liveData);
 	}
 	// Always persist so output node/edge mutations from ensureOutputNodeAndEdge are saved
 	liveCanvas?.setData?.(data);
+	// #region agent log
+	const outAfterSetData = countOutputNodeIds(data);
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:updateEdgeLabelsAndSave", message: "after setData", data: { dataOutputCount: outAfterSetData.count, dataOutputIds: outAfterSetData.ids }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
+	// #endregion
 	if (liveCanvas?.requestSave) liveCanvas.requestSave(); // so Obsidian marks canvas dirty and won't overwrite on tab switch
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
 	if (!saved) new Notice("Failed to save canvas.");
@@ -325,7 +349,8 @@ async function runSingleNode(
 	canvasFilePath: string,
 	data: CanvasData,
 	nodeId: string,
-	liveCanvas: LiveCanvas | null
+	liveCanvas: LiveCanvas | null,
+	runStartData: RunStartCanvasData
 ): Promise<string> {
 	const node = getNodeById(data, nodeId);
 	if (!node) return "";
@@ -387,7 +412,7 @@ async function runSingleNode(
 			fullPrompt,
 			thinking: result.thinking,
 		});
-		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
 		return result.response;
 	}
 	if (role === "purple") {
@@ -406,7 +431,7 @@ async function runSingleNode(
 			fullPrompt,
 			thinking: result.thinking,
 		});
-		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
 		return result.response;
 	}
 	if (role === "red") {
@@ -425,7 +450,7 @@ async function runSingleNode(
 			fullPrompt,
 			thinking: result.thinking,
 		});
-		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
 		return result.response;
 	}
 	if (role === "blue") {
@@ -434,7 +459,7 @@ async function runSingleNode(
 		const result = await kernel.run(code, concatenatedPart);
 		setNodeResult(canvasKey, nodeId, result);
 		ensureOutputNodeAndEdge(data, node, result, settings);
-		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas);
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
 		return result;
 	}
 	return "";
@@ -833,7 +858,8 @@ export async function runNode(
 	settings: ZettelPluginSettings,
 	canvasFilePath: string,
 	nodeId: string,
-	liveCanvas: LiveCanvas | null
+	liveCanvas: LiveCanvas | null,
+	runStartData?: RunStartCanvasData | null
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
@@ -844,14 +870,17 @@ export async function runNode(
 	if (role === "green") return { ok: false, message: "Green nodes are output-only." };
 	const parentIds = getParentIdsSortedByY(nodeId, data);
 	const canvasKey = getCanvasKey(canvasFilePath);
+	// #region agent log
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runNode", message: "runNode entry", data: { canvasKey, nodeId, canvasFilePath }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3" }) }).catch(() => {});
+	// #endregion
 	for (const pid of parentIds) {
 		if (getNodeResult(canvasKey, pid) == null) {
-			return runChain(app, settings, canvasFilePath, nodeId, liveCanvas);
+			return runChain(app, settings, canvasFilePath, nodeId, liveCanvas, nodeId, runStartData ?? null);
 		}
 	}
 	try {
 		setRunningNodeId(canvasKey, nodeId);
-		await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nodeId, liveCanvas);
+		await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nodeId, liveCanvas, runStartData ?? null);
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, message: e instanceof Error ? e.message : String(e) };
@@ -867,7 +896,8 @@ export async function runEntireCanvas(
 	app: App,
 	settings: ZettelPluginSettings,
 	canvasFilePath: string,
-	liveCanvas: LiveCanvas | null
+	liveCanvas: LiveCanvas | null,
+	runStartData?: RunStartCanvasData | null
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
@@ -879,7 +909,7 @@ export async function runEntireCanvas(
 		for (const nid of order) {
 			try {
 				setRunningNodeId(canvasKey, nid);
-				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas);
+				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas, runStartData ?? null);
 			} finally {
 				setRunningNodeId(canvasKey, null);
 			}
@@ -890,35 +920,86 @@ export async function runEntireCanvas(
 	}
 }
 
-/** Run chain from roots to the given node. */
+/** Count output-type node ids in data (toNode of edges labeled output). */
+function countOutputNodeIds(data: CanvasData): { count: number; ids: string[] } {
+	const ids = [...new Set(data.edges.filter((e) => parseEdgeVariableName(e.label) === EDGE_LABEL_OUTPUT).map((e) => e.toNode))];
+	return { count: ids.length, ids };
+}
+
+/** Return ordered node IDs for a chain from roots to the given target, or null if no data, no path, or cycle. */
+export async function getChainNodeIds(
+	app: App,
+	settings: ZettelPluginSettings,
+	canvasFilePath: string,
+	targetNodeId: string
+): Promise<string[] | null> {
+	const data = await loadCanvasData(app.vault, canvasFilePath);
+	if (!data) return null;
+	const roots = getRootIds(data);
+	const rootsReachingCurrent = roots.filter((r) => canReach(data, r, targetNodeId));
+	if (rootsReachingCurrent.length === 0) return null;
+	const topo = topologicalOrderToTarget(data, targetNodeId, settings);
+	if ("cycle" in topo) return null;
+	return topo.order;
+}
+
+/** Run chain from roots to the given node.
+ * @param displayNodeId - when set (e.g. from "Run node" on a node with unrun parents), show "running" on this node for the whole chain; when unset, show running on each node in order.
+ * @param runStartData - canvas state at run start; used to respect deletions and placement since run started (including queued jobs).
+ */
 export async function runChain(
 	app: App,
 	settings: ZettelPluginSettings,
 	canvasFilePath: string,
 	nodeId: string,
-	liveCanvas: LiveCanvas | null
+	liveCanvas: LiveCanvas | null,
+	displayNodeId?: string,
+	runStartData?: RunStartCanvasData | null
 ): Promise<{ ok: boolean; message?: string }> {
 	const data = await loadCanvasData(app.vault, canvasFilePath);
 	if (!data) return { ok: false, message: "Could not load canvas data." };
+	// #region agent log
+	const outAtLoad = countOutputNodeIds(data);
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:runChain", message: "runChain after load", data: { nodeCount: data.nodes.length, outputCount: outAtLoad.count, outputIds: outAtLoad.ids, targetNodeId: nodeId }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1" }) }).catch(() => {});
+	// #endregion
 	const roots = getRootIds(data);
 	const rootsReachingCurrent = roots.filter((r) => canReach(data, r, nodeId));
 	if (rootsReachingCurrent.length === 0) return { ok: false, message: "No root reaches this node." };
 	const topo = topologicalOrderToTarget(data, nodeId, settings);
 	if ("cycle" in topo) return { ok: false, message: CYCLE_ERROR_MESSAGE };
 	const order = topo.order;
+	const orderSet = new Set(order);
+	// Remove output/prompt/thinking nodes that belong to nodes outside this chain so a later
+	// run chain (e.g. queued job) does not "restore" outputs from a previous chain run.
+	const auxiliaryLabels = [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING];
+	const toRemove = new Set<string>(
+		data.edges
+			.filter(
+				(e) =>
+					auxiliaryLabels.includes(parseEdgeVariableName(e.label)) && !orderSet.has(e.fromNode)
+			)
+			.map((e) => e.toNode)
+	);
+	if (toRemove.size > 0) {
+		data.nodes = data.nodes.filter((n) => !toRemove.has(n.id));
+		data.edges = data.edges.filter((e) => !toRemove.has(e.fromNode) && !toRemove.has(e.toNode));
+	}
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
+		if (displayNodeId != null) setRunningNodeId(canvasKey, displayNodeId);
 		for (const nid of order) {
 			try {
-				setRunningNodeId(canvasKey, nid);
-				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas);
+				if (displayNodeId == null) setRunningNodeId(canvasKey, nid);
+				await runSingleNode(app, settings, canvasKey, canvasFilePath, data, nid, liveCanvas, runStartData ?? null);
 			} finally {
-				setRunningNodeId(canvasKey, null);
+				if (displayNodeId == null) setRunningNodeId(canvasKey, null);
 			}
 		}
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, message: e instanceof Error ? e.message : String(e) };
+	} finally {
+		if (displayNodeId != null) setRunningNodeId(canvasKey, null);
 	}
 }
 
@@ -971,5 +1052,10 @@ export async function dismissAllOutput(
 	liveCanvas?.setData?.(data);
 	if (liveCanvas?.requestSave) liveCanvas.requestSave();
 	const saved = await saveCanvasData(vault, canvasFilePath, data);
+	// #region agent log
+	const reRead = await loadCanvasData(vault, canvasFilePath);
+	const outAfterDismiss = reRead ? countOutputNodeIds(reRead) : { count: -1, ids: [] };
+	fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "runner.ts:dismissAllOutput", message: "after save, re-read file", data: { saved, outputCountOnFile: outAfterDismiss.count, outputIdsOnFile: outAfterDismiss.ids }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H4" }) }).catch(() => {});
+	// #endregion
 	if (!saved) new Notice("Failed to save canvas.");
 }

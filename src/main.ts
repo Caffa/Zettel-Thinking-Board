@@ -6,6 +6,7 @@ import {duplicateCanvasTemplate, saveCanvasAsTemplate, isCanvasInTemplateFolder}
 import {
 	dismissAllOutput as runnerDismissAllOutput,
 	dismissOutput as runnerDismissOutput,
+	getChainNodeIds,
 	runChain as runnerRunChain,
 	runEntireCanvas as runnerRunEntireCanvas,
 	runNode as runnerRunNode,
@@ -22,11 +23,17 @@ import type {CanvasData} from "./canvas/types";
 import {EDGE_LABEL_OUTPUT} from "./canvas/types";
 import {getKernelForCanvas, terminateAllKernels, terminateKernel} from "./engine/kernelManager";
 import {
+	addQueuedNodeIds,
 	clearRunQueue,
+	clearRunStartCanvasData,
 	dequeueRun,
 	enqueueRun,
+	getCanvasKey,
 	getRunInProgress,
+	getRunStartCanvasData,
+	removeQueuedNodeIds,
 	setRunInProgress,
+	setRunStartCanvasData,
 } from "./engine/state";
 import {getExample1CanvasData} from "./tutorials/example1Data";
 import {getExample4CanvasData} from "./tutorials/example4Data";
@@ -854,9 +861,27 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	/** Process the next job in the run queue, if any. */
 	private async processQueue(): Promise<void> {
 		const job = dequeueRun();
-		if (job == null) return;
+		if (job == null) {
+			clearRunStartCanvasData();
+			return;
+		}
+		// #region agent log
+		fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "dequeued job", data: { type: job.type, canvasFilePath: job.canvasFilePath, nodeId: "nodeId" in job ? job.nodeId : undefined }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2-H3-H5" }) }).catch(() => {});
+		// #endregion
+		if (job.type === "chain" && "nodeId" in job) {
+			const chainIds = await getChainNodeIds(this.app, this.settings, job.canvasFilePath, job.nodeId);
+			if (chainIds && chainIds.length > 0) {
+				removeQueuedNodeIds(getCanvasKey(job.canvasFilePath), chainIds);
+			}
+		}
 		setRunInProgress(true);
 		const view = this.getCanvasViewByPath(job.canvasFilePath);
+		// Run-start data is set by the first run (runNode/runChain/runEntireCanvas); queued jobs use it
+		// #region agent log
+		if (view) {
+			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "view path vs job path", data: { jobCanvasFilePath: job.canvasFilePath, viewFilePath: view.file.path, match: view.file.path === job.canvasFilePath }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {});
+		}
+		// #endregion
 		const liveCanvas = view
 			? (view.canvas as import("./engine/canvasApi").LiveCanvas)
 			: null;
@@ -866,20 +891,24 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 				(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 			}
 		}
+		const runStartData = getRunStartCanvasData(getCanvasKey(job.canvasFilePath));
 		try {
 			if (job.type === "node" && "nodeId" in job) {
-				const result = await runnerRunNode(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas);
+				const result = await runnerRunNode(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas, runStartData);
 				if (!result.ok) new Notice(result.message ?? "Run node failed.");
 			} else if (job.type === "chain" && "nodeId" in job) {
-				const result = await runnerRunChain(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas);
+				const result = await runnerRunChain(this.app, this.settings, job.canvasFilePath, job.nodeId, liveCanvas, undefined, runStartData);
 				if (!result.ok) new Notice(result.message ?? "Run chain failed.");
 			} else if (job.type === "entire") {
-				const result = await runnerRunEntireCanvas(this.app, this.settings, job.canvasFilePath, liveCanvas);
+				const result = await runnerRunEntireCanvas(this.app, this.settings, job.canvasFilePath, liveCanvas, runStartData);
 				if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
 			}
 		} catch (e) {
 			new Notice(e instanceof Error ? e.message : String(e));
 		} finally {
+			// #region agent log
+			fetch("http://127.0.0.1:7243/ingest/453147b6-6b57-40b4-a769-82c9dd3c5ee7", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "main.ts:processQueue", message: "job finished, before processQueue", data: { hadView: !!view }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H5" }) }).catch(() => {});
+			// #endregion
 			setRunInProgress(false);
 			await this.processQueue();
 		}
@@ -907,8 +936,9 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
 		setRunInProgress(true);
+		setRunStartCanvasData(getCanvasKey(view.file.path), liveCanvas.getData?.() ?? null);
 		try {
-			const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+			const result = await runnerRunNode(this.app, this.settings, view.file.path, nodeId, liveCanvas, getRunStartCanvasData(getCanvasKey(view.file.path)));
 			if (!result.ok) new Notice(result.message ?? "Run node failed.");
 		} finally {
 			setRunInProgress(false);
@@ -922,6 +952,10 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 		if (!view) return;
 		if (getRunInProgress()) {
 			enqueueRun({ type: "chain", canvasFilePath: view.file.path, nodeId });
+			const chainIds = await getChainNodeIds(this.app, this.settings, view.file.path, nodeId);
+			if (chainIds && chainIds.length > 0) {
+				addQueuedNodeIds(getCanvasKey(view.file.path), chainIds);
+			}
 			new Notice("Run queued.");
 			const active = this.getActiveCanvasView();
 			if (active?.file.path === view.file.path) {
@@ -938,8 +972,9 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
 		setRunInProgress(true);
+		setRunStartCanvasData(getCanvasKey(view.file.path), liveCanvas.getData?.() ?? null);
 		try {
-			const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas);
+			const result = await runnerRunChain(this.app, this.settings, view.file.path, nodeId, liveCanvas, undefined, getRunStartCanvasData(getCanvasKey(view.file.path)));
 			if (!result.ok) new Notice(result.message ?? "Run chain failed.");
 		} finally {
 			setRunInProgress(false);
@@ -976,8 +1011,9 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 			(liveCanvas as { getData?: () => unknown }).getData = () => viewWithData.getData?.();
 		}
 		setRunInProgress(true);
+		setRunStartCanvasData(getCanvasKey(view.file.path), liveCanvas.getData?.() ?? null);
 		try {
-			const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas);
+			const result = await runnerRunEntireCanvas(this.app, this.settings, view.file.path, liveCanvas, getRunStartCanvasData(getCanvasKey(view.file.path)));
 			if (!result.ok) new Notice(result.message ?? "Run entire canvas failed.");
 		} finally {
 			setRunInProgress(false);
