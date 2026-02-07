@@ -78,6 +78,27 @@
 	color: var(--text-muted);
 }
 
+.ztb-error-console-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-2-1);
+}
+.ztb-error-console-header .ztb-section-title {
+	margin-bottom: 0;
+}
+.ztb-console-clear {
+	font-size: var(--font-smaller);
+	padding: var(--size-2-1) var(--size-4-2);
+}
+.ztb-error-console {
+	border-color: var(--background-modifier-error);
+}
+.ztb-error-line {
+	color: var(--text-error);
+	margin: 0;
+}
+
 .ztb-guide-details {
 	margin-bottom: var(--size-4-2);
 	border: 1px solid var(--background-modifier-border);
