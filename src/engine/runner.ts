@@ -445,8 +445,46 @@ async function runSingleNode(
 		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
 		return result.response;
 	}
+	if (role === "cyan") {
+		const model = settings.ollamaCyanModel || "llama2";
+		const temperature = settings.ollamaCyanTemperature ?? DEFAULT_SETTINGS.ollamaCyanTemperature;
+		const start = performance.now();
+		const result = await ollamaGenerate({
+			model,
+			prompt: fullPrompt,
+			stream: false,
+			options: { temperature },
+		});
+		setNodeDuration(canvasKey, nodeId, performance.now() - start);
+		setNodeResult(canvasKey, nodeId, result.response);
+		ensureOutputNodeAndEdge(data, node, result.response, settings, {
+			fullPrompt,
+			thinking: result.thinking,
+		});
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
+		return result.response;
+	}
+	if (role === "pink") {
+		const model = settings.ollamaPinkModel || "llama2";
+		const temperature = settings.ollamaPinkTemperature ?? DEFAULT_SETTINGS.ollamaPinkTemperature;
+		const start = performance.now();
+		const result = await ollamaGenerate({
+			model,
+			prompt: fullPrompt,
+			stream: false,
+			options: { temperature },
+		});
+		setNodeDuration(canvasKey, nodeId, performance.now() - start);
+		setNodeResult(canvasKey, nodeId, result.response);
+		ensureOutputNodeAndEdge(data, node, result.response, settings, {
+			fullPrompt,
+			thinking: result.thinking,
+		});
+		await updateEdgeLabelsAndSave(app.vault, canvasFilePath, data, nodeId, edgeModes, liveCanvas, runStartData);
+		return result.response;
+	}
 	if (role === "blue") {
-		const kernel = getKernelForCanvas(canvasKey, settings.pythonPath);
+		const kernel = getKernelForCanvas(canvasKey, settings.pythonPath, settings.pythonCondaEnv);
 		const code = stripPythonCodeFence(template);
 		const result = await kernel.run(code, concatenatedPart);
 		setNodeResult(canvasKey, nodeId, result);

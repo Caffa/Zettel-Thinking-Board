@@ -52,6 +52,12 @@ describe("getNodeRole", () => {
 		expect(getNodeRole({ color: "6" }, settings)).toBe("blue");
 		expect(getNodeRole({ color: "3" }, settings)).toBe("yellow");
 		expect(getNodeRole({ color: "4" }, settings)).toBe("green");
+		expect(getNodeRole({ color: "#00bcd4" }, settings)).toBe("cyan");
+		expect(getNodeRole({ color: "#e91e63" }, settings)).toBe("pink");
+	});
+	it("returns null when role color is disabled (empty)", () => {
+		const disabledBlue = { ...DEFAULT_SETTINGS, colorBlue: "" };
+		expect(getNodeRole({ color: "6" }, disabledBlue)).toBeNull();
 	});
 	it("returns null when color does not match any setting", () => {
 		expect(getNodeRole({ color: "99" }, settings)).toBeNull();

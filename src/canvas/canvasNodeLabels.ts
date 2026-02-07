@@ -135,7 +135,7 @@ function createLabelEl(text: string): HTMLElement {
 }
 
 function isAIRole(role: NodeRole): boolean {
-	return role === "orange" || role === "purple" || role === "red";
+	return role === "orange" || role === "purple" || role === "red" || role === "cyan" || role === "pink";
 }
 
 function formatDurationMs(durationMs: number): string {

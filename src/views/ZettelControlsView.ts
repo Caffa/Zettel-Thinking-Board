@@ -177,11 +177,33 @@ export class ZettelControlsView extends ItemView {
 			consoleEl.scrollTop = consoleEl.scrollHeight;
 		};
 
+		// Error console (timeouts, stderr, kernel errors)
+		const errorHeader = el.createDiv({ cls: "ztb-error-console-header" });
+		errorHeader.createEl("h4", { text: "Error console", cls: "ztb-section-title" });
+		const clearErrorBtn = errorHeader.createEl("button", { cls: "ztb-console-clear", text: "Clear" });
+		clearErrorBtn.addEventListener("click", () => {
+			errorConsoleEl.empty();
+		});
+		const errorTip = el.createEl("p", { cls: "ztb-controls-tip" });
+		errorTip.setText("Python errors, timeouts, and stderr appear here.");
+		const errorConsoleEl = el.createDiv({ cls: "ztb-console ztb-error-console" });
+		const appendError = (message: string) => {
+			if (!this.containerEl.isConnected) return;
+			const p = errorConsoleEl.createEl("p", { cls: "ztb-console-line ztb-error-line" });
+			p.setText(message);
+			errorConsoleEl.scrollTop = errorConsoleEl.scrollHeight;
+		};
+
 		const wireKernelLog = () => {
 			const kernel = this.plugin.getKernelForActiveCanvas();
-			if (kernel) kernel.onLog = (line: string) => {
-				if (this.containerEl.isConnected) appendLog(line);
-			};
+			if (kernel) {
+				kernel.onLog = (line: string) => {
+					if (this.containerEl.isConnected) appendLog(line);
+				};
+				kernel.onError = (message: string) => {
+					if (this.containerEl.isConnected) appendError(message);
+				};
+			}
 		};
 		wireKernelLog();
 		this.plugin.registerEvent(

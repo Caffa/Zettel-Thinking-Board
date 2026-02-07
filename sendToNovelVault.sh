@@ -14,5 +14,6 @@ cp styles.css zettel-thinking-board
 # send to my novel folder
 # cp -r zettel-thinking-board /Users/caffae/Notes/Novel-Writing/.obsidian/plugins/
 cp -r zettel-thinking-board "/Users/caffae/Notes/ZettelPublish (Content Creator V2 April 2025)/.obsidian/plugins/"
-echo "Updated plugin in novel writing and zettelpublish folders"
+# echo "Updated plugin in novel writing and zettelpublish folders"
+echo "Updated plugin in zettelpublish folders"
 

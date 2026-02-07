@@ -1006,6 +1006,6 @@ export default class ZettelThinkingBoardPlugin extends Plugin {
 	getKernelForActiveCanvas(): import("./engine/pythonKernel").PythonKernel | null {
 		const view = this.getActiveOrFirstCanvasView();
 		if (!view) return null;
-		return getKernelForCanvas(view.file.path, this.settings.pythonPath);
+		return getKernelForCanvas(view.file.path, this.settings.pythonPath, this.settings.pythonCondaEnv);
 	}
 }

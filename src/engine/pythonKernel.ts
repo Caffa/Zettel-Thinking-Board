@@ -11,12 +11,19 @@ const END_MARKER = "__ZTB_END__";
 export interface PythonKernel {
 	run(code: string, inputText: string): Promise<string>;
 	onLog?: ((line: string) => void) | undefined;
+	onError?: ((message: string) => void) | undefined;
 	terminate(): void;
 }
 
-export function createPythonKernel(pythonPath: string): PythonKernel {
+function reportError(onError: ((message: string) => void) | undefined, err: Error): void {
+	const msg = err?.message ?? String(err);
+	onError?.(msg);
+}
+
+export function createPythonKernel(pythonPath: string, condaEnv?: string): PythonKernel {
 	let child: import("child_process").ChildProcess | null = null;
 	let onLogCb: ((line: string) => void) | undefined;
+	let onErrorCb: ((message: string) => void) | undefined;
 	let pendingResolve: ((value: string) => void) | null = null;
 	let pendingReject: ((err: Error) => void) | null = null;
 	let stdoutBuf = "";
@@ -26,7 +33,13 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 		return new Promise((resolve, reject) => {
 			try {
 				const { spawn } = require("child_process") as typeof import("child_process");
-				child = spawn(pythonPath, ["-u", "-i"], {
+				const exec = (condaEnv && condaEnv.trim())
+					? "conda"
+					: (pythonPath || "python3");
+				const args = (condaEnv && condaEnv.trim())
+					? ["run", "-n", condaEnv.trim(), "--no-capture-output", pythonPath || "python", "-u", "-i"]
+					: ["-u", "-i"];
+				child = spawn(exec, args, {
 					stdio: ["pipe", "pipe", "pipe"],
 					shell: false,
 				});
@@ -48,16 +61,25 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 					const s = chunk.toString();
 					const lines = s.split("\n");
 					for (const line of lines) {
+						const trimmed = line.trim();
+						if (!trimmed) continue;
 						if (line.startsWith("OBSIDIAN_LOG:")) {
 							onLogCb?.(line.slice("OBSIDIAN_LOG:".length).trim());
+						} else {
+							onErrorCb?.(trimmed);
 						}
 					}
 				});
-				child.on("error", reject);
+				child.on("error", (err) => {
+					reportError(onErrorCb, err);
+					reject(err);
+				});
 				child.on("exit", (code) => {
 					child = null;
 					if (pendingReject) {
-						pendingReject(new Error(`Python exited with code ${code ?? "unknown"}`));
+						const err = new Error(`Python exited with code ${code ?? "unknown"}`);
+						reportError(onErrorCb, err);
+						pendingReject(err);
 						pendingResolve = null;
 						pendingReject = null;
 					}
@@ -65,6 +87,8 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 				// Allow process to start
 				setTimeout(() => resolve(), 100);
 			} catch (e) {
+				const err = e instanceof Error ? e : new Error(String(e));
+				reportError(onErrorCb, err);
 				reject(e);
 			}
 		});
@@ -91,6 +115,7 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 			pendingReject = reject;
 			child!.stdin!.write(payload, (err) => {
 				if (err) {
+					reportError(onErrorCb, err);
 					pendingReject?.(err);
 					pendingResolve = null;
 					pendingReject = null;
@@ -98,7 +123,9 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 			});
 			setTimeout(() => {
 				if (pendingReject) {
-					pendingReject(new Error("Python execution timeout (60s)"));
+					const timeoutErr = new Error("Python execution timeout (60s)");
+					reportError(onErrorCb, timeoutErr);
+					pendingReject(timeoutErr);
 					pendingResolve = null;
 					pendingReject = null;
 				}
@@ -113,6 +140,12 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 		set onLog(cb: ((line: string) => void) | undefined) {
 			onLogCb = cb;
 		},
+		get onError() {
+			return onErrorCb;
+		},
+		set onError(cb: ((message: string) => void) | undefined) {
+			onErrorCb = cb;
+		},
 		run,
 		terminate() {
 			if (child) {
@@ -120,7 +153,9 @@ export function createPythonKernel(pythonPath: string): PythonKernel {
 				child = null;
 			}
 			if (pendingReject) {
-				pendingReject(new Error("Kernel terminated"));
+				const err = new Error("Kernel terminated");
+				reportError(onErrorCb, err);
+				pendingReject(err);
 				pendingResolve = null;
 				pendingReject = null;
 			}

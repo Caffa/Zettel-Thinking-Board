@@ -17,35 +17,39 @@ import ntc from "ntcjs";
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
 
-export type NodeRole = "red" | "orange" | "purple" | "blue" | "yellow" | "green";
+export type NodeRole = "red" | "orange" | "purple" | "blue" | "yellow" | "green" | "cyan" | "pink";
 
 /** Default label for each role when no model name is set. */
 export const ROLE_LABELS: Record<NodeRole, string> = {
 	orange: "Model (primary)",
 	purple: "Model (secondary)",
 	red: "Model (tertiary)",
+	cyan: "Model (4th)",
+	pink: "Model (5th)",
 	blue: "Python",
 	yellow: "Text",
 	green: "Output",
 };
 
 /** Model roles that use an Ollama model and support an optional custom label. */
-const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red"];
+const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red", "cyan", "pink"];
 
-/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary, then Python, Text, Output. */
-export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "blue", "yellow", "green"];
+/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary → 4th → 5th, then Python, Text, Output. */
+export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "cyan", "pink", "blue", "yellow", "green"];
 
 /** Human-readable names for conflict alerts (one-to-one color mapping). */
 const ROLE_DISPLAY_NAMES: Record<NodeRole, string> = {
 	orange: "Primary model",
 	purple: "Secondary model",
 	red: "Tertiary model",
+	cyan: "4th model",
+	pink: "5th model",
 	blue: "Python node",
 	yellow: "Text node",
 	green: "Output node",
 };
 
-/** Returns another role that already uses this color value, or null if unique. */
+/** Returns another role that already uses this color value, or null if unique. Skips roles with empty (Disabled) color. */
 function getOtherRoleWithColor(
 	settings: ZettelPluginSettings,
 	colorValue: string,
@@ -55,7 +59,9 @@ function getOtherRoleWithColor(
 	for (const r of COLOR_ROLES) {
 		if (r === excludeRole) continue;
 		const key = `color${r.charAt(0).toUpperCase() + r.slice(1)}` as keyof ZettelPluginSettings;
-		if ((settings[key] as string) === colorValue) return r;
+		const roleColor = (settings[key] as string) ?? "";
+		if (!roleColor.trim()) continue; // Disabled role: no conflict
+		if (roleColor === colorValue) return r;
 	}
 	return null;
 }
@@ -64,6 +70,8 @@ function getModelName(role: NodeRole, settings: ZettelPluginSettings): string {
 	if (role === "orange") return (settings.ollamaOrangeModel || "").trim();
 	if (role === "purple") return (settings.ollamaPurpleModel || "").trim();
 	if (role === "red") return (settings.ollamaRedModel || "").trim();
+	if (role === "cyan") return (settings.ollamaCyanModel || "").trim();
+	if (role === "pink") return (settings.ollamaPinkModel || "").trim();
 	return "";
 }
 
@@ -71,6 +79,8 @@ function getModelLabel(role: NodeRole, settings: ZettelPluginSettings): string {
 	if (role === "orange") return (settings.modelLabelOrange || "").trim();
 	if (role === "purple") return (settings.modelLabelPurple || "").trim();
 	if (role === "red") return (settings.modelLabelRed || "").trim();
+	if (role === "cyan") return (settings.modelLabelCyan || "").trim();
+	if (role === "pink") return (settings.modelLabelPink || "").trim();
 	return "";
 }
 
@@ -91,15 +101,23 @@ export interface ZettelPluginSettings {
 	ollamaOrangeModel: string;
 	ollamaPurpleModel: string;
 	ollamaRedModel: string;
+	ollamaCyanModel: string;
+	ollamaPinkModel: string;
 	modelLabelOrange: string;
 	modelLabelPurple: string;
 	modelLabelRed: string;
+	modelLabelCyan: string;
+	modelLabelPink: string;
 	ollamaOrangeTemperature: number;
 	ollamaPurpleTemperature: number;
 	ollamaRedTemperature: number;
+	ollamaCyanTemperature: number;
+	ollamaPinkTemperature: number;
 	colorRed: CanvasColor;
 	colorOrange: CanvasColor;
 	colorPurple: CanvasColor;
+	colorCyan: CanvasColor;
+	colorPink: CanvasColor;
 	colorBlue: CanvasColor;
 	colorYellow: CanvasColor;
 	colorGreen: CanvasColor;
@@ -108,6 +126,8 @@ export interface ZettelPluginSettings {
 	showNodeRoleLabels: boolean;
 	supportShorthandPlaceholders: boolean;
 	pythonPath: string;
+	/** Conda environment name. When set, Python is run via `conda run -n &lt;name&gt;`. */
+	pythonCondaEnv: string;
 	canvasTemplateFolder: string;
 	canvasOutputFolder: string;
 }
@@ -116,15 +136,23 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	ollamaOrangeModel: "",
 	ollamaPurpleModel: "",
 	ollamaRedModel: "",
+	ollamaCyanModel: "",
+	ollamaPinkModel: "",
 	modelLabelOrange: "",
 	modelLabelPurple: "",
 	modelLabelRed: "",
+	modelLabelCyan: "",
+	modelLabelPink: "",
 	ollamaOrangeTemperature: 0.8,
 	ollamaPurpleTemperature: 0.8,
 	ollamaRedTemperature: 0.8,
+	ollamaCyanTemperature: 0.8,
+	ollamaPinkTemperature: 0.8,
 	colorRed: "5",
 	colorOrange: "1",
 	colorPurple: "2",
+	colorCyan: "#00bcd4",
+	colorPink: "#e91e63",
 	colorBlue: "6",
 	colorYellow: "3",
 	colorGreen: "4",
@@ -133,6 +161,7 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	showNodeRoleLabels: true,
 	supportShorthandPlaceholders: true,
 	pythonPath: "python3",
+	pythonCondaEnv: "",
 	canvasTemplateFolder: "",
 	canvasOutputFolder: "",
 };
@@ -269,10 +298,36 @@ const PRESET_COLORS: { value: CanvasColor; label: string }[] = [
 const PRESET_SWATCH_CLASS = "ztb-color-swatch--preset-";
 
 /** Role to human-readable block title for settings. */
-const MODEL_BLOCK_TITLES: Record<"orange" | "purple" | "red", string> = {
+const MODEL_BLOCK_TITLES: Record<"orange" | "purple" | "red" | "cyan" | "pink", string> = {
 	orange: "Primary model",
 	purple: "Secondary model",
 	red: "Tertiary model",
+	cyan: "4th model",
+	pink: "5th model",
+};
+
+type ModelRole = "orange" | "purple" | "red" | "cyan" | "pink";
+
+const MODEL_KEY_BY_ROLE: Record<ModelRole, keyof ZettelPluginSettings> = {
+	orange: "ollamaOrangeModel",
+	purple: "ollamaPurpleModel",
+	red: "ollamaRedModel",
+	cyan: "ollamaCyanModel",
+	pink: "ollamaPinkModel",
+};
+const LABEL_KEY_BY_ROLE: Record<ModelRole, keyof ZettelPluginSettings> = {
+	orange: "modelLabelOrange",
+	purple: "modelLabelPurple",
+	red: "modelLabelRed",
+	cyan: "modelLabelCyan",
+	pink: "modelLabelPink",
+};
+const TEMPERATURE_KEY_BY_ROLE: Record<ModelRole, keyof ZettelPluginSettings> = {
+	orange: "ollamaOrangeTemperature",
+	purple: "ollamaPurpleTemperature",
+	red: "ollamaRedTemperature",
+	cyan: "ollamaCyanTemperature",
+	pink: "ollamaPinkTemperature",
 };
 
 /**
@@ -281,7 +336,7 @@ const MODEL_BLOCK_TITLES: Record<"orange" | "purple" | "red", string> = {
  */
 function addModelBlock(
 	containerEl: HTMLElement,
-	role: "orange" | "purple" | "red",
+	role: ModelRole,
 	models: string[] | null,
 	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> },
 	warningCallback?: (message: string | null) => void
@@ -289,15 +344,15 @@ function addModelBlock(
 	const s = plugin.settings;
 	const title = MODEL_BLOCK_TITLES[role];
 	const details = containerEl.createEl("details", { cls: "ztb-model-block" });
-	// Primary expanded by default; secondary and tertiary collapsed to reduce scroll
+	// Primary expanded by default; others collapsed to reduce scroll
 	details.open = role === "orange";
 
 	const summary = details.createEl("summary", { cls: "ztb-model-block-summary" });
 	const content = details.createDiv({ cls: "ztb-model-block-content" });
 
-	const modelKey = role === "orange" ? "ollamaOrangeModel" : role === "purple" ? "ollamaPurpleModel" : "ollamaRedModel";
-	const labelKey = role === "orange" ? "modelLabelOrange" : role === "purple" ? "modelLabelPurple" : "modelLabelRed";
-	const temperatureKey = role === "orange" ? "ollamaOrangeTemperature" : role === "purple" ? "ollamaPurpleTemperature" : "ollamaRedTemperature";
+	const modelKey = MODEL_KEY_BY_ROLE[role];
+	const labelKey = LABEL_KEY_BY_ROLE[role];
+	const temperatureKey = TEMPERATURE_KEY_BY_ROLE[role];
 
 	function updateSummaryText(): void {
 		const name = (plugin.settings[modelKey] as string)?.trim() || "";
@@ -386,6 +441,8 @@ function setSwatchToCustom(swatch: HTMLElement, hex: string): void {
 	swatch.style.backgroundColor = hex || "#888";
 }
 
+const COLOR_DISABLED_SENTINEL = "disabled";
+
 function addColorSetting(
 	containerEl: HTMLElement,
 	plugin: Plugin & { settings: ZettelPluginSettings; saveSettings(): Promise<void> },
@@ -395,10 +452,11 @@ function addColorSetting(
 	warningCallback?: (message: string | null) => void
 ): void {
 	const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
-	const current = plugin.settings[key] as CanvasColor;
-	const isPreset = /^[1-6]$/.test(current);
+	const current = (plugin.settings[key] as CanvasColor) ?? "";
+	const isDisabled = !current || !String(current).trim();
+	const isPreset = !isDisabled && /^[1-6]$/.test(current);
 	const presetValue = isPreset ? current : "1";
-	const customValue = isPreset ? "" : current;
+	const customValue = isPreset ? "" : (isDisabled ? "" : current);
 
 	const row = containerEl.createDiv({ cls: "setting-item" });
 	const info = row.createDiv({ cls: "setting-item-info" });
@@ -415,7 +473,10 @@ function addColorSetting(
 		return analyzeColor(actualColor);
 	};
 
-	if (isPreset) {
+	if (isDisabled) {
+		setSwatchToCustom(swatch, "#888");
+		swatch.setAttr("title", "Disabled");
+	} else if (isPreset) {
 		setSwatchToPreset(swatch, presetValue);
 		swatch.setAttr("title", getPresetLabel(presetValue));
 	} else {
@@ -430,11 +491,13 @@ function addColorSetting(
 		type: "button"
 	});
 
-	let currentValue = isPreset ? presetValue : "custom";
+	let currentValue: string = isDisabled ? COLOR_DISABLED_SENTINEL : (isPreset ? presetValue : "custom");
 
 	const updateDropdownButton = () => {
 		dropdownButton.empty();
-		if (currentValue === "custom") {
+		if (currentValue === COLOR_DISABLED_SENTINEL) {
+			dropdownButton.setText("Disabled");
+		} else if (currentValue === "custom") {
 			dropdownButton.setText("Custom (hex)");
 		} else {
 			const actualColor = getPresetColor(Number(currentValue) as 1 | 2 | 3 | 4 | 5 | 6);
@@ -447,6 +510,24 @@ function addColorSetting(
 
 	const dropdownMenu = dropdownContainer.createDiv({ cls: "ztb-custom-dropdown-menu" });
 	dropdownMenu.style.display = "none";
+
+	// Add Disabled option (first)
+	const disabledOption = dropdownMenu.createDiv({ cls: "ztb-custom-dropdown-option" });
+	if (currentValue === COLOR_DISABLED_SENTINEL) disabledOption.addClass("ztb-selected");
+	disabledOption.setText("Disabled");
+	disabledOption.addEventListener("click", () => {
+		currentValue = COLOR_DISABLED_SENTINEL;
+		(plugin.settings as unknown as Record<string, CanvasColor>)[key] = "";
+		customHex.style.display = "none";
+		dropdownMenu.querySelectorAll(".ztb-custom-dropdown-option").forEach(el => el.removeClass("ztb-selected"));
+		disabledOption.addClass("ztb-selected");
+		updateDropdownButton();
+		setSwatchToCustom(swatch, "#888");
+		swatch.setAttr("title", "Disabled");
+		if (warningCallback) warningCallback(null);
+		dropdownMenu.style.display = "none";
+		plugin.saveSettings();
+	});
 
 	// Add preset color options
 	PRESET_COLORS.forEach((p) => {
@@ -527,7 +608,7 @@ function addColorSetting(
 		attr: { placeholder: "#RRGGBB" },
 	});
 	customHex.value = customValue;
-	customHex.style.display = isPreset ? "none" : "inline-block";
+	customHex.style.display = (isDisabled || isPreset) ? "none" : "inline-block";
 	customHex.style.width = "6em";
 	customHex.style.marginLeft = "6px";
 	customHex.addEventListener("input", () => {
@@ -600,10 +681,12 @@ export class ZettelSettingTab extends PluginSettingTab {
 				const fallback = ollamaContainer.createDiv({ cls: "ztb-ollama-fallback" });
 				fallback.createEl("p", { text: "Ollama not reachable or no models installed. Enter model names manually or check Installation & Dependencies section above." });
 			}
-			// One collapsible block per model role: primary (expanded), secondary and tertiary (collapsed)
+			// One collapsible block per model role: primary (expanded), others collapsed
 			addModelBlock(ollamaContainer, "orange", models.length === 0 ? null : models, this.plugin, warningCallback);
 			addModelBlock(ollamaContainer, "purple", models.length === 0 ? null : models, this.plugin, warningCallback);
 			addModelBlock(ollamaContainer, "red", models.length === 0 ? null : models, this.plugin, warningCallback);
+			addModelBlock(ollamaContainer, "cyan", models.length === 0 ? null : models, this.plugin, warningCallback);
+			addModelBlock(ollamaContainer, "pink", models.length === 0 ? null : models, this.plugin, warningCallback);
 		})();
 
 		new Setting(executionSection)
@@ -614,6 +697,17 @@ export class ZettelSettingTab extends PluginSettingTab {
 				.setValue(s.pythonPath)
 				.onChange(async (value) => {
 					s.pythonPath = value || "python3";
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(executionSection)
+			.setName("Conda environment")
+			.setDesc("Optional: conda environment name. When set, Python runs via conda (e.g. myenv). Leave empty to use Python path directly.")
+			.addText((text) => text
+				.setPlaceholder("e.g. myenv")
+				.setValue(s.pythonCondaEnv ?? "")
+				.onChange(async (value) => {
+					s.pythonCondaEnv = (value ?? "").trim();
 					await this.plugin.saveSettings();
 				}));
 
@@ -678,7 +772,10 @@ export class ZettelSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		new Setting(displaySection)
+		// Variables & placeholders subsection
+		const variablesSubsection = displaySection.createDiv({ cls: "ztb-settings-subsection" });
+		variablesSubsection.createEl("h5", { text: "Variables & placeholders", cls: "ztb-subsection-title" });
+		new Setting(variablesSubsection)
 			.setName("Support shorthand placeholders ({{name}})")
 			.setDesc("When on, both {{var:name}} and {{name}} in card text are treated as inject placeholders (edge label = name). When off, only {{var:name}} is inject.")
 			.addToggle((toggle) => toggle
