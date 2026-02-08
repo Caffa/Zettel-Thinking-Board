@@ -29,10 +29,12 @@ function resolveColorValue(value: CanvasColor): string {
 	return v || "#888";
 }
 
-const MODEL_GROUP_TITLES: Record<"orange" | "purple" | "red", string> = {
-	orange: "Primary model",
-	purple: "Secondary model",
-	red: "Tertiary model",
+const MODEL_GROUP_TITLES: Record<"orange" | "purple" | "red" | "cyan" | "pink", string> = {
+	orange: "1st model",
+	purple: "2nd model",
+	red: "3rd model",
+	cyan: "4th model",
+	pink: "5th model",
 };
 
 export class ZettelControlsView extends ItemView {
@@ -69,10 +71,10 @@ export class ZettelControlsView extends ItemView {
 
 		const addModelGroup = (
 			parent: HTMLElement,
-			role: "orange" | "purple" | "red",
-			modelKey: "ollamaOrangeModel" | "ollamaPurpleModel" | "ollamaRedModel",
-			temperatureKey: "ollamaOrangeTemperature" | "ollamaPurpleTemperature" | "ollamaRedTemperature",
-			colorKey: "colorOrange" | "colorPurple" | "colorRed",
+			role: "orange" | "purple" | "red" | "cyan" | "pink",
+			modelKey: "ollamaOrangeModel" | "ollamaPurpleModel" | "ollamaRedModel" | "ollamaCyanModel" | "ollamaPinkModel",
+			temperatureKey: "ollamaOrangeTemperature" | "ollamaPurpleTemperature" | "ollamaRedTemperature" | "ollamaCyanTemperature" | "ollamaPinkTemperature",
+			colorKey: "colorOrange" | "colorPurple" | "colorRed" | "colorCyan" | "colorPink",
 			models: string[] | null
 		) => {
 			const group = parent.createDiv({ cls: "ztb-controls-model-group" });
@@ -132,6 +134,8 @@ export class ZettelControlsView extends ItemView {
 			addModelGroup(modelGroupsContainer, "orange", "ollamaOrangeModel", "ollamaOrangeTemperature", "colorOrange", models.length > 0 ? models : null);
 			addModelGroup(modelGroupsContainer, "purple", "ollamaPurpleModel", "ollamaPurpleTemperature", "colorPurple", models.length > 0 ? models : null);
 			addModelGroup(modelGroupsContainer, "red", "ollamaRedModel", "ollamaRedTemperature", "colorRed", models.length > 0 ? models : null);
+			addModelGroup(modelGroupsContainer, "cyan", "ollamaCyanModel", "ollamaCyanTemperature", "colorCyan", models.length > 0 ? models : null);
+			addModelGroup(modelGroupsContainer, "pink", "ollamaPinkModel", "ollamaPinkTemperature", "colorPink", models.length > 0 ? models : null);
 		})();
 
 		// Run queue
