@@ -985,22 +985,9 @@ export async function runChain(
 	const topo = topologicalOrderToTarget(data, nodeId, settings);
 	if ("cycle" in topo) return { ok: false, message: CYCLE_ERROR_MESSAGE };
 	const order = topo.order;
-	const orderSet = new Set(order);
-	// Remove output/prompt/thinking nodes that belong to nodes outside this chain so a later
-	// run chain (e.g. queued job) does not "restore" outputs from a previous chain run.
-	const auxiliaryLabels = [EDGE_LABEL_OUTPUT, EDGE_LABEL_PROMPT, EDGE_LABEL_THINKING];
-	const toRemove = new Set<string>(
-		data.edges
-			.filter(
-				(e) =>
-					auxiliaryLabels.includes(parseEdgeVariableName(e.label)) && !orderSet.has(e.fromNode)
-			)
-			.map((e) => e.toNode)
-	);
-	if (toRemove.size > 0) {
-		data.nodes = data.nodes.filter((n) => !toRemove.has(n.id));
-		data.edges = data.edges.filter((e) => !toRemove.has(e.fromNode) && !toRemove.has(e.toNode));
-	}
+	// Do not remove output/prompt/thinking nodes from nodes outside this chain; otherwise
+	// "Run Everything" then "Run Node" would wipe the Run Everything output nodes when
+	// Run Node runs the chain. We only add/update outputs for nodes in this chain.
 	const canvasKey = getCanvasKey(canvasFilePath);
 	try {
 		if (displayNodeId != null) setRunningNodeId(canvasKey, displayNodeId);
