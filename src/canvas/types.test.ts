@@ -51,7 +51,7 @@ describe("getNodeRole", () => {
 		expect(getNodeRole({ color: "5" }, settings)).toBe("red");
 		expect(getNodeRole({ color: "6" }, settings)).toBe("blue");
 		expect(getNodeRole({ color: "3" }, settings)).toBe("yellow");
-		expect(getNodeRole({ color: "4" }, settings)).toBe("green");
+		expect(getNodeRole({ color: "#03807D" }, settings)).toBe("green");
 		expect(getNodeRole({ color: "#00bcd4" }, settings)).toBe("cyan");
 		expect(getNodeRole({ color: "#e91e63" }, settings)).toBe("pink");
 	});
@@ -260,7 +260,7 @@ describe("getNodeById", () => {
 });
 
 describe("findOutputNodeForSource", () => {
-	const settings = { ...DEFAULT_SETTINGS, colorGreen: "5" };
+	const settings = { ...DEFAULT_SETTINGS };
 
 	it("returns null when source node not found", () => {
 		const data: CanvasData = { nodes: [], edges: [] };
@@ -272,7 +272,7 @@ describe("findOutputNodeForSource", () => {
 		const data: CanvasData = {
 			nodes: [
 				{ id: "src", x: 10, y: sourceY, width: 200, height: 50, type: "text", text: "", color: "1" },
-				{ id: "out", x: 10, y: greenY, width: 200, height: 100, type: "text", text: "", color: "5" },
+				{ id: "out", x: 10, y: greenY, width: 200, height: 100, type: "text", text: "", color: "#03807D" },
 			],
 			edges: [],
 		};

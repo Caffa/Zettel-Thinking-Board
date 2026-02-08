@@ -169,6 +169,15 @@ export function getQueuedNodeIds(canvasKey: string): ReadonlySet<string> {
 	return queuedNodeIdsState.get(canvasKey) ?? new Set();
 }
 
+export function getRunQueueLength(): number {
+	return runQueue.length;
+}
+
+/** Shallow copy of the run queue for display; does not mutate the queue. */
+export function getRunQueueSnapshot(): ReadonlyArray<RunQueueJob> {
+	return [...runQueue];
+}
+
 /** Clear run queue and run-in-progress flag (e.g. on plugin unload). */
 export function clearRunQueue(): void {
 	runInProgress = false;

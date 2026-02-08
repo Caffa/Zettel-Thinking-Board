@@ -10,4 +10,5 @@ export interface IZettelThinkingBoardPlugin {
 	getActiveOrFirstCanvasView(): { canvas: unknown; file: { path: string } } | null;
 	getKernelForActiveCanvas(): { onLog?: ((line: string) => void) | undefined; onError?: ((message: string) => void) | undefined; run(code: string, inputText: string): Promise<string>; terminate(): void } | null;
 	registerEvent(ref: unknown): void;
+	registerInterval(id: number): void;
 }

@@ -7,7 +7,7 @@ import type {
 	CanvasTextData,
 } from "obsidian/canvas";
 import type {CanvasColor, NodeRole, ZettelPluginSettings} from "../settings";
-import {COLOR_ROLES} from "../settings";
+import {COLOR_ROLES, OUTPUT_NODE_COLOR} from "../settings";
 
 export type {AllCanvasNodeData, CanvasData, CanvasEdgeData, CanvasFileData, CanvasNodeData, CanvasTextData};
 
@@ -19,10 +19,11 @@ export function normalizeColor(c: CanvasColor | undefined): string {
 	return s;
 }
 
-/** Classify node role by comparing node color to settings. */
+/** Classify node role by comparing node color to settings. Output nodes use fixed OUTPUT_NODE_COLOR. */
 export function getNodeRole(node: { color?: CanvasColor }, settings: ZettelPluginSettings): NodeRole | null {
 	const nodeColor = normalizeColor(node.color);
 	if (!nodeColor) return null;
+	if (nodeColor === normalizeColor(OUTPUT_NODE_COLOR)) return "green";
 	for (const role of COLOR_ROLES) {
 		const key = `color${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof ZettelPluginSettings;
 		const settingColor = normalizeColor(settings[key] as CanvasColor | undefined);
@@ -153,8 +154,7 @@ export function findOutputNodeForSource(
 	if (outputEdge) return outputEdge.toNode;
 	const source = getNodeById(data, sourceNodeId);
 	if (!source) return null;
-	const greenColor = normalizeColor(settings.colorGreen as CanvasColor | undefined);
-	if (!greenColor) return null;
+	const greenColor = normalizeColor(OUTPUT_NODE_COLOR);
 	const expectedY = source.y + source.height + GREEN_NODE_PADDING;
 	const toleranceAbove = 30; // allow small layout drift above default
 	const candidates: { id: string; centerY: number }[] = [];

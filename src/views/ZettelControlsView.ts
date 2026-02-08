@@ -2,8 +2,20 @@ import {ItemView, Notice, Setting, WorkspaceLeaf} from "obsidian";
 import type {IZettelThinkingBoardPlugin} from "../types";
 import {terminateKernel} from "../engine/kernelManager";
 import {fetchOllamaModels} from "../engine/ollama";
+import {
+	clearRunQueue,
+	getRunInProgress,
+	getRunQueueSnapshot,
+	type RunQueueJob,
+} from "../engine/state";
 import {DEFAULT_SETTINGS, getPresetColor} from "../settings";
 import type {CanvasColor} from "../settings";
+
+function formatQueueJobLabel(job: RunQueueJob): string {
+	const fileName = job.canvasFilePath.split("/").pop() ?? job.canvasFilePath;
+	const typeLabel = job.type === "node" ? "Node" : job.type === "chain" ? "Chain" : "Entire";
+	return `${typeLabel} (${fileName})`;
+}
 
 export const ZETTEL_CONTROLS_VIEW_TYPE = "zettel-controls";
 
@@ -24,6 +36,8 @@ const MODEL_GROUP_TITLES: Record<"orange" | "purple" | "red", string> = {
 };
 
 export class ZettelControlsView extends ItemView {
+	private _queueIntervalId: number | null = null;
+
 	constructor(leaf: WorkspaceLeaf, public readonly plugin: IZettelThinkingBoardPlugin) {
 		super(leaf);
 	}
@@ -119,6 +133,38 @@ export class ZettelControlsView extends ItemView {
 			addModelGroup(modelGroupsContainer, "purple", "ollamaPurpleModel", "ollamaPurpleTemperature", "colorPurple", models.length > 0 ? models : null);
 			addModelGroup(modelGroupsContainer, "red", "ollamaRedModel", "ollamaRedTemperature", "colorRed", models.length > 0 ? models : null);
 		})();
+
+		// Run queue
+		el.createEl("h4", { text: "Run queue", cls: "ztb-section-title" });
+		const queueDisplayEl = el.createDiv({ cls: "ztb-queue-display" });
+		const updateQueueDisplay = (): void => {
+			if (!this.containerEl.isConnected || !queueDisplayEl.parentElement) return;
+			const inProgress = getRunInProgress();
+			const snapshot = getRunQueueSnapshot();
+			const n = snapshot.length;
+			if (inProgress && n === 0) {
+				queueDisplayEl.setText("1 run in progress.");
+			} else if (inProgress && n > 0) {
+				queueDisplayEl.setText(`1 run in progress. ${n} queued: ${snapshot.map(formatQueueJobLabel).join(", ")}`);
+			} else if (n > 0) {
+				queueDisplayEl.setText(`${n} queued: ${snapshot.map(formatQueueJobLabel).join(", ")}`);
+			} else {
+				queueDisplayEl.setText("No runs queued.");
+			}
+		};
+		updateQueueDisplay();
+		this._queueIntervalId = window.setInterval(updateQueueDisplay, 1000);
+		this.plugin.registerInterval(this._queueIntervalId);
+		new Setting(el)
+			.setName("Stop runs and clear queue")
+			.setDesc("Clear the run queue. Current run will finish.")
+			.addButton((btn) =>
+				btn.setButtonText("Stop runs and clear queue").onClick(() => {
+					clearRunQueue();
+					updateQueueDisplay();
+					new Notice("Queue cleared. Current run will finish.");
+				})
+			);
 
 		// Kernel controls
 		el.createEl("h4", { text: "Kernel controls", cls: "ztb-section-title" });
@@ -232,6 +278,10 @@ export class ZettelControlsView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		if (this._queueIntervalId != null) {
+			clearInterval(this._queueIntervalId);
+			this._queueIntervalId = null;
+		}
 		this.containerEl.removeClass("ztb-controls-view");
 		this.containerEl.empty();
 	}

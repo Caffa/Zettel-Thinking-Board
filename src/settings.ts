@@ -17,6 +17,9 @@ import ntc from "ntcjs";
 /** CanvasColor: Obsidian preset '1'..'6' or hex e.g. '#FFA500' */
 export type CanvasColor = string;
 
+/** Fixed hex color for output nodes (not from palette), so palette colors remain available for model mapping. */
+export const OUTPUT_NODE_COLOR = "#03807D";
+
 export type NodeRole = "red" | "orange" | "purple" | "blue" | "yellow" | "green" | "cyan" | "pink";
 
 /** Default label for each role when no model name is set. */
@@ -34,8 +37,8 @@ export const ROLE_LABELS: Record<NodeRole, string> = {
 /** Model roles that use an Ollama model and support an optional custom label. */
 const MODEL_ROLES: NodeRole[] = ["orange", "purple", "red", "cyan", "pink"];
 
-/** All roles that have a configurable node color. Canonical display order: primary → secondary → tertiary → 4th → 5th, then Python, Text, Output. */
-export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "cyan", "pink", "blue", "yellow", "green"];
+/** All roles that have a configurable node color. Output (green) uses fixed OUTPUT_NODE_COLOR and is excluded. */
+export const COLOR_ROLES: NodeRole[] = ["orange", "purple", "red", "cyan", "pink", "blue", "yellow"];
 
 /** Human-readable names for conflict alerts (one-to-one color mapping). */
 const ROLE_DISPLAY_NAMES: Record<NodeRole, string> = {
@@ -120,7 +123,6 @@ export interface ZettelPluginSettings {
 	colorPink: CanvasColor;
 	colorBlue: CanvasColor;
 	colorYellow: CanvasColor;
-	colorGreen: CanvasColor;
 	showPromptInOutput: boolean;
 	showThinkingNode: boolean;
 	showNodeRoleLabels: boolean;
@@ -151,11 +153,10 @@ export const DEFAULT_SETTINGS: ZettelPluginSettings = {
 	colorRed: "5",
 	colorOrange: "1",
 	colorPurple: "2",
-	colorCyan: "#00bcd4",
-	colorPink: "#e91e63",
+	colorCyan: "4",
+	colorPink: "",
 	colorBlue: "6",
 	colorYellow: "3",
-	colorGreen: "4",
 	showPromptInOutput: false,
 	showThinkingNode: false,
 	showNodeRoleLabels: true,
@@ -741,14 +742,6 @@ export class ZettelSettingTab extends PluginSettingTab {
 			"yellow",
 			"Text node color",
 			"Color for text (input) nodes: pass-through text, no AI processing",
-			warningCallback
-		);
-		addColorSetting(
-			displaySection,
-			this.plugin,
-			"green",
-			"Output node color",
-			"Color for auto-generated output nodes on the canvas",
 			warningCallback
 		);
 

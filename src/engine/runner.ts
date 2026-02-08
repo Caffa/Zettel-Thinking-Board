@@ -32,7 +32,7 @@ import {
 	setEdgeModes,
 	setRunningNodeId,
 } from "./state";
-import {DEFAULT_SETTINGS, shadeColor, type NodeRole, type ZettelPluginSettings} from "../settings";
+import {DEFAULT_SETTINGS, OUTPUT_NODE_COLOR, shadeColor, type NodeRole, type ZettelPluginSettings} from "../settings";
 
 type EdgeInputMode = "inject" | "concatenate";
 
@@ -683,7 +683,7 @@ function ensureOutputNodeAndEdge(
 		height,
 		extraExclude
 	);
-	const greenColor = settings.colorGreen;
+	const greenColor = OUTPUT_NODE_COLOR;
 
 	// 1. Ensure output node
 	let resolvedOutputId: string;
@@ -760,7 +760,7 @@ function ensureOutputNodeAndEdge(
 			height,
 			thinkingExclude
 		);
-		const thinkingColor = shadeColor(settings.colorGreen, 0.15);
+		const thinkingColor = shadeColor(OUTPUT_NODE_COLOR, 0.15);
 
 		if (thinkingId) {
 			const tn = getNodeById(data, thinkingId);
@@ -829,7 +829,7 @@ function ensureOutputNodeAndEdge(
 			height,
 			promptExclude
 		);
-		const promptColor = shadeColor(settings.colorGreen, 0.25);
+		const promptColor = shadeColor(OUTPUT_NODE_COLOR, 0.25);
 		const promptToSide = promptSide === "left" ? "right" : promptSide === "right" ? "left" : promptSide === "top" ? "bottom" : "top";
 
 		if (promptId) {

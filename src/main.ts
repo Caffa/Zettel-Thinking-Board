@@ -1,5 +1,5 @@
 import {ItemView, Menu, Notice, Plugin, TFile, WorkspaceLeaf, normalizePath} from "obsidian";
-import {DEFAULT_SETTINGS, ZettelPluginSettings, ZettelSettingTab} from "./settings";
+import {DEFAULT_SETTINGS, OUTPUT_NODE_COLOR, ZettelPluginSettings, ZettelSettingTab} from "./settings";
 import {ZettelControlsView, ZETTEL_CONTROLS_VIEW_TYPE} from "./views/ZettelControlsView";
 import {CanvasTemplateModal} from "./views/CanvasTemplateModal";
 import {duplicateCanvasTemplate, saveCanvasAsTemplate, isCanvasInTemplateFolder} from "./canvas/canvasTemplates";
@@ -65,14 +65,13 @@ function tutorialColor(settings: ZettelPluginSettings, key: keyof ZettelPluginSe
 const TUTORIAL_WORKFLOWS_23_X_OFFSET = 850;
 const TUTORIAL_WORKFLOWS_23_ID_PREFIX = "wf23-";
 
-/** Map preset color number to user's actual color setting. */
+/** Map preset color number to user's actual color setting. Output (4) uses fixed OUTPUT_NODE_COLOR. */
 function applyColorSettings(presetColor: string | undefined, settings: ZettelPluginSettings): string {
-	// Map preset "1","2","3","4","5","6" to user's configured colors
+	if (presetColor === "4") return OUTPUT_NODE_COLOR; // Output: fixed color (not from palette)
 	const colorMap: Record<string, keyof ZettelPluginSettings> = {
 		"1": "colorOrange",  // Orange (LLM primary)
 		"2": "colorPurple",  // Purple (LLM secondary)
 		"3": "colorYellow",  // Yellow (Text input)
-		"4": "colorGreen",   // Green (Output)
 		"5": "colorRed",     // Red (LLM tertiary)
 		"6": "colorBlue",    // Blue (Python)
 	};
@@ -114,7 +113,6 @@ function getTutorialCanvasData(settings: ZettelPluginSettings): CanvasData {
 	const cPurple = tutorialColor(settings, "colorPurple");
 	const cBlue = tutorialColor(settings, "colorBlue");
 	const cYellow = tutorialColor(settings, "colorYellow");
-	const cGreen = tutorialColor(settings, "colorGreen");
 
 	/** Plain text node (no role): use for labels/instructions so they are not treated as comment nodes. */
 	const n = (id: string, text: string, x: number, y: number, color: string, w: number, h: number) =>
@@ -285,29 +283,29 @@ function getTutorialCanvasData(settings: ZettelPluginSettings): CanvasData {
 		// Column 1: label = plain text; nodes in lane have roles
 		n(lab1, "Primary model: sends prompt to Ollama. Set the model in Zettel Controls.", commentLeftX(col1), orangeY, "", TUT_COMMENT_W, TUT_LABEL_H),
 		n(orangeNode, "What is 2+2? Reply in one sentence.", laneNodeX(col1, 0), orangeY, cOrange, TUT_NODE_LANE_W, TUT_NODE_H),
-		n(orangeOut, "", laneNodeX(col1, LANE_OFFSET), orangeOutY, cGreen, TUT_NODE_LANE_W, TUT_NODE_H),
+		n(orangeOut, "", laneNodeX(col1, LANE_OFFSET), orangeOutY, OUTPUT_NODE_COLOR, TUT_NODE_LANE_W, TUT_NODE_H),
 
 		// Column 2
 		n(lab2a, "Secondary model (same idea, different model).", commentLeftX(col2), purpleY, "", TUT_COMMENT_W, TUT_LABEL_H),
 		n(purpleNode, "Summarize in 5 words: The quick brown fox jumps.", laneNodeX(col2, 0), purpleY, cPurple, TUT_NODE_LANE_W, TUT_NODE_H),
-		n(purpleOut, "", laneNodeX(col2, LANE_OFFSET), purpleOutY, cGreen, TUT_NODE_LANE_W, TUT_NODE_H),
+		n(purpleOut, "", laneNodeX(col2, LANE_OFFSET), purpleOutY, OUTPUT_NODE_COLOR, TUT_NODE_LANE_W, TUT_NODE_H),
 		n(lab2b, "Text: input text; passed to next node as-is (pass-through).", commentRightX(col2), yellowY, "", TUT_COMMENT_W, TUT_LABEL_H),
 		n(yellowNode, "I'm input text. My text is passed to the next node (concatenated).", laneNodeX(col2, 0), yellowY, cYellow, TUT_NODE_LANE_W, TUT_NODE_H),
 		n(lab2c, "Python: runs code. Use variable input for parent text.", commentLeftX(col2), blueY, "", TUT_COMMENT_W, TUT_LABEL_H),
 		n(blueNode, "print('Python says:', (input or '')[:80] or '(no input)')\n# input = text from parent", laneNodeX(col2, LANE_OFFSET), blueY, cBlue, TUT_NODE_LANE_W, TUT_NODE_H),
-		n(blueOut, "", laneNodeX(col2, 0), blueOutY, cGreen, TUT_NODE_LANE_W, TUT_NODE_H),
+		n(blueOut, "", laneNodeX(col2, 0), blueOutY, OUTPUT_NODE_COLOR, TUT_NODE_LANE_W, TUT_NODE_H),
 
 		// Column 3
 		n(lab3, "Concatenation: no edge label → parent output appended before your prompt (then \"---\", then this card).", commentLeftX(col3), concatCommentY, "", TUT_COMMENT_W, TUT_LABEL_H + 12),
 		n(concatComment, "I'm input text. My full text is added to the next node's prompt.", laneNodeX(col3, 0), concatCommentY, cYellow, TUT_NODE_LANE_W, TUT_NODE_H),
 		n(concatOrange, "Reply in one word: what did the previous card say?", laneNodeX(col3, LANE_OFFSET), concatOrangeY, cOrange, TUT_NODE_LANE_W, TUT_NODE_H),
-		n(concatOut, "", laneNodeX(col3, 0), concatOutY, cGreen, TUT_NODE_LANE_W, TUT_NODE_H),
+		n(concatOut, "", laneNodeX(col3, 0), concatOutY, OUTPUT_NODE_COLOR, TUT_NODE_LANE_W, TUT_NODE_H),
 
 		// Column 4
 		n(lab4, "Variable injection: put a name on the edge and use {{var:name}} in the prompt; that parent is injected there.", commentLeftX(col4), injectFirstY, "", TUT_COMMENT_W, TUT_LABEL_H + 12),
 		n(injectFirst, "Say exactly: Hello world.", laneNodeX(col4, 0), injectFirstY, cOrange, TUT_NODE_LANE_W, TUT_NODE_H),
 		n(injectSecond, "They said: {{var:reply}}. Confirm in 2 words.", laneNodeX(col4, LANE_OFFSET), injectSecondY, cOrange, TUT_NODE_LANE_W, TUT_NODE_H),
-		n(injectOut, "", laneNodeX(col4, 0), injectOutY, cGreen, TUT_NODE_LANE_W, TUT_NODE_H),
+		n(injectOut, "", laneNodeX(col4, 0), injectOutY, OUTPUT_NODE_COLOR, TUT_NODE_LANE_W, TUT_NODE_H),
 
 		// Column 5 & 6: plain text labels only
 		n(lab5, "How to run: Right-click a node → Run node or Run chain. Right-click empty canvas → Run entire canvas or Dismiss all output. Title bar: ▶ Run entire canvas, 🗑 Dismiss all. Commands: Open Zettel Controls; Create tutorial canvas.", commentLeftX(col5), y5, "", TUT_COMMENT_W + TUT_LANE_GAP + TUT_NODE_LANE_W, 195),
